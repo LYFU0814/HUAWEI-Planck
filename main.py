@@ -14,7 +14,7 @@ frame_id = -1
 
 class Robot:
     __slots__ = ['rid', 'take_type', 'factor_time_value', 'factor_collision_value', "bench_id", 'old_pos', 'jobs',
-                 'speed_angular', 'speed_linear', 'direction', 'pos', 'action_list', 'next_schedule_time', 'delta_dist', 'delta_angular']
+                 'speed_angular', 'speed_linear', 'direction', 'pos', 'action_list']
 
     def __init__(self, robot_id, x, y):
         self.rid = robot_id
@@ -26,10 +26,7 @@ class Robot:
         self.speed_linear = (0.0, 0.0)  # x, y 方向线速度 设置前进速度，单位为米/秒。 - 正数表示前进 - 负数表示后退。
         self.speed_angular = 0.0  # 设置旋转速度，单位为弧度/秒。 - 负数表示顺时针旋转 - 正数表示逆时针旋转。
         self.action_list = {}  # key
-        self.next_schedule_time = []
         self.bench_id = -1
-        self.delta_dist = 0.0
-        self.delta_angular = 0.0
         self.jobs = []
 
     def set_job(self, jobs):
@@ -78,8 +75,6 @@ class Robot:
         self.factor_collision_value = data[3]
         self.speed_angular = data[4]
         self.speed_linear = (data[5], data[6])
-        self.delta_angular = abs(float(data[7]) - self.direction) % math.pi
-        self.delta_dist = distance_o((data[8], data[9]), self.pos)
         self.direction = data[7]
         self.set_pos(data[8], data[9])
         self.is_in_bench()
@@ -88,18 +83,19 @@ class Robot:
         return len(self.jobs) > 0
 
     def is_in_bench(self):
-        if self.bench_id != -1 and self.get_job()[0] == self.bench_id and \
-                    workbenches[self.bench_id].has_product(self.get_job()[2]):
-            if self.get_job()[1] == 0:
+        if self.bench_id != -1:
+            log("location: " + str(self.bench_id) + "  job : " + str(self.get_job()))
+        if self.bench_id != -1 and self.get_job()[0] == self.bench_id:
+            if self.get_job()[1] == 0 and workbenches[self.bench_id].has_product(self.get_job()[2]):
                 self.buy()
-            elif self.get_job()[1] == 1:
+            elif self.get_job()[1] == 1 and workbenches[self.bench_id].need_product(self.get_job()[2]):
                 self.sell()
 
     def get_v0(self):
-        return self.delta_dist / 0.02
+        return self.speed_linear[0]
 
     def get_w0(self):
-        return self.delta_angular / 0.02
+        return self.speed_angular
 
     def get_weight(self):
         if self.take_type == 0:
@@ -124,7 +120,7 @@ class Workbench:
         else:
             self.work_time = 1
         self.remaining_time = self.work_time
-        self.status_ingredient_value = 0
+        self.status_ingredient_value = -1
         self.status_ingredient = set()  # 原材料格状态 二进制位表描述，例如 48(110000)表示拥有物品 4 和 5。
         self.product_id = {}
         self.pos = (0, 0)
@@ -147,21 +143,29 @@ class Workbench:
             if (1 << product_id) & param != 0:  # 拥有原材料
                 self.status_ingredient.add(product_id)
             else:
-                add_request(Request(self.bid, product_id, product_buy_price[product_id]))
+                add_request(Request(self.bid, product_id, product_buy_price[product_id]))  # 需要购买
 
     def query_short_supply(self):
         return self.status_ingredient.difference(bench_type_need[self._type])
 
     # 需要先买后卖
     def update_product(self, param):
-        self.product_id[self._type] = 1 if param == 1 else 0
+        self.product_id[self._type] = param
         if self.product_id[self._type] == 1:
-            add_request(Request(self.bid, self._type, -product_buy_price[self._type]))
+            add_request(Request(self.bid, self._type, -product_sell_price[self._type]))
 
     def has_product(self, pid):
         if pid in self.product_id and self.product_id[self._type] == 1:
             return True
         return False
+
+    def need_product(self, pid):
+        """
+        平台需要这个产品，并且原材料格为空
+        :param pid: 产品id
+        :return: 是否需要
+        """
+        return pid in bench_type_need[self._type] and pid not in self.status_ingredient
 
 
 robots = []
@@ -264,7 +268,7 @@ def input_data():
 
 
 def start_task(job):
-    if job.speed_linear != robots[job.key[0]].speed_linear:
+    if job.speed_linear != robots[job.key[0]].speed_linear[0]:
         robots[job.key[0]].forward(job.speed_linear)
     if job.speed_angular != robots[job.key[0]].speed_angular:
         robots[job.key[0]].rotate(job.speed_angular)
@@ -324,7 +328,7 @@ def finish():
 
 def choose_workbench():
     # 根据request_form来计算下一个移动目的地
-    return 13, 0
+    return 13, 20
 
 
 def movement(rid, bid):
@@ -335,11 +339,19 @@ def movement(rid, bid):
     return start_time, stop_time, line_speed, angular_speed
 
 
+def movement2(rid, bid):
+    robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
+    v0, w0 = robots[rid].get_v0(), robots[rid].get_w0()
+    start_time, stop_time = 3, 100
+    line_speed, angular_speed = 5.8, math.pi / 7
+    return start_time, stop_time, line_speed, angular_speed
+
+
 def process():
     for robot in robots:
         if robot.is_busy():
             bid = robot.get_job()[0]
-            start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bid)
+            start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bid) if len(robot.jobs) == 2 else movement2(robot.rid, bid)
             schedule.add_job(Job(frame_id, robot.rid, bid, angular_speed, line_speed, start_task))
             continue
         # 选择平台，总共两个阶段
@@ -347,7 +359,7 @@ def process():
         # 进行线速度和角速度计算, 并添加任务，计算第一个阶段
         start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bench_id1)
         schedule.add_job(Job(start_time, robot.rid, bench_id1, angular_speed, line_speed, start_task))
-        robot.set_job([(bench_id1, 0, 1), (bench_id2, 1, 2)])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
+        robot.set_job([(bench_id1, 0, 1), (bench_id2, 1, 1)])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
 
 
 # ----------------------------------------
