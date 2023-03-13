@@ -345,13 +345,13 @@ def choose_workbench():
     根据request_form来计算下一个移动目的地,元组形式(x, y, z)
     :return: 两个目的地，先去第一个再去第二个，x表示目的平台id，y表示买卖，买，用0表示，卖用1表示, 第三位表示产品id
     """
-    return (13, 0, 1), (20, 1, 1)
+    return (13, 0, 3), (8, 1, 3)
 
 
 def movement(rid, bid):
     robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
     v0, w0 = robots[rid].get_v0(), robots[rid].get_w0()
-    # start_time, stop_time = 3, 100
+    start_time, stop_time = 3, 100
     robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
     line_accelerated_speed = line_accelerated_speed_hold if robots[rid].is_busy() else line_accelerated_speed_normal
     angular_accelerated_speed = angular_accelerated_speed_hold if robots[rid].is_busy() else angular_accelerated_speed_normal
