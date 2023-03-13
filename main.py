@@ -92,12 +92,21 @@ class Robot:
                 self.sell()
 
     def get_v0(self):
+        """
+        :return: 线速度的初速度
+        """
         return self.speed_linear[0]
 
     def get_w0(self):
+        """
+        :return: 角速度的初速度
+        """
         return self.speed_angular
 
     def get_weight(self):
+        """
+        :return: 获得当前机器人重量
+        """
         if self.take_type == 0:
             return robot_weight_normal
         else:
@@ -327,7 +336,10 @@ def finish():
 
 
 def choose_workbench():
-    # 根据request_form来计算下一个移动目的地
+    """
+    根据request_form来计算下一个移动目的地
+    :return: 两个目的地，一个买，一个卖
+    """
     return 13, 20
 
 
