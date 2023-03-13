@@ -16,9 +16,11 @@ def log(content, clear = False):
 
 
 class Job:
-    def __init__(self, start, robot_id, bench_id, speed_angular, speed_linear, start_func):
+    __slots__ = ['start', 'key', 'speed_angular', 'speed_linear', 'exist', 'start_func']
+
+    def __init__(self, start, robot_id, job_key, speed_angular, speed_linear, start_func):
         self.start = start
-        self.key = (robot_id, bench_id, start)
+        self.key = (robot_id, job_key, start)
         self.speed_angular = speed_angular
         self.speed_linear = speed_linear
         self.exist = True
@@ -42,10 +44,11 @@ class Job:
 
 
 class Schedule:
+    __slots__ = ['jobs_start', 'job_record']
+
     def __init__(self):
         self.jobs_start = []
         self.job_record = {}  # 有无
-        self.ready_jobs = Queue()
 
     def add_job(self, job):
         """

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import time
 
 import numpy as np
 import sys
@@ -173,6 +174,14 @@ class Workbench:
         return pid in self.ingredient_status.keys() and self.ingredient_status[pid] == 0
 
 
+def collision_detection(positions):
+    distances = {}
+    for x in range(len(positions)):
+        for y in range(x + 1, len(positions)):
+            distances[(x, y)] = distance_m(positions[x], positions[y])
+    return distances
+
+
 robots = []
 workbenches = []
 workbenches_category = [[] for _ in range(10)]  # i类型工作台 = [b_1, b_2,...]
@@ -281,11 +290,6 @@ def start_task(job):
 
 def stop_task(job):
     # TODO
-    # 判断是否到达平台
-
-    # 判断购入或者卖出
-    # robots[job.key[0]].sell()
-    # robots[job.key[0]].buy()
 
     # 是否进行下次任务
     if robots[job.key[0]].speed_linear != 0:
@@ -333,10 +337,10 @@ def finish():
 
 def choose_workbench():
     """
-    根据request_form来计算下一个移动目的地
-    :return: 两个目的地，一个买，一个卖
+    根据request_form来计算下一个移动目的地,元组形式(x, y, z)
+    :return: 两个目的地，先去第一个再去第二个，x表示目的平台id，y表示买卖，买，用0表示，卖用1表示, 第三位表示产品id
     """
-    return 13, 20
+    return (13, 0, 1), (20, 1, 1)
 
 
 def movement(rid, bid):
@@ -356,6 +360,7 @@ def movement2(rid, bid):
 
 
 def process():
+    log(collision_detection([robot.get_pos() for robot in robots]))
     for robot in robots:
         if robot.is_busy():
             bid = robot.get_job()[0]
@@ -363,11 +368,11 @@ def process():
             schedule.add_job(Job(frame_id, robot.rid, bid, angular_speed, line_speed, start_task))
             continue
         # 选择平台，总共两个阶段
-        bench_id1, bench_id2 = choose_workbench()
+        job_1, job_2 = choose_workbench()
         # 进行线速度和角速度计算, 并添加任务，计算第一个阶段
-        start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bench_id1)
-        schedule.add_job(Job(start_time, robot.rid, bench_id1, angular_speed, line_speed, start_task))
-        robot.set_job([(bench_id1, 0, 1), (bench_id2, 1, 1)])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
+        start_time, stop_time, line_speed, angular_speed = movement(robot.rid, job_1[0])
+        schedule.add_job(Job(frame_id, robot.rid, job_1, angular_speed, line_speed, start_task))
+        robot.set_job([job_1, job_2])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
 
 
 # ----------------------------------------
@@ -375,6 +380,7 @@ def process():
 # ----------------------------------------
 def interact():
     data = input_data()
+    stat_time = time.time()
     update_venue(data)
     log("第%d帧：" % frame_id)
     log("购买")
@@ -386,6 +392,9 @@ def interact():
     process()
     schedule.running(frame_id)
     output_result()
+    stop_time = time.time()
+    if stop_time - stat_time > 0.0149:
+        log("timeout")
 
 
 init_env()
