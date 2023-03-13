@@ -114,27 +114,22 @@ class Robot:
 
 
 class Workbench:
-    __slots__ = ['bid', 'pos', '_type', 'remaining_time', 'status_ingredient', 'status_ingredient_value',
-                 'product_id', 'work_time']
+    __slots__ = ['bid', 'pos', '_type', 'remaining_time', 'status_ingredient_value',
+                 'product_status', 'work_time', 'ingredient_status']
 
     def __init__(self, bid, _type, x, y):
         self.bid = bid
         self._type = _type
-        if self._type <= 3:
-            self.work_time = 50
-        elif self._type <= 6:
-            self.work_time = 500
-        elif self._type == 7:
-            self.work_time = 1000
-        else:
-            self.work_time = 1
+        self.work_time = bench_work_time[self._type]
         self.remaining_time = self.work_time
         self.status_ingredient_value = -1
-        self.status_ingredient = set()  # 原材料格状态 二进制位表描述，例如 48(110000)表示拥有物品 4 和 5。
-        self.product_id = {}
+        self.ingredient_status = {}
+        for product_id in bench_type_need[self._type]:
+            self.ingredient_status[product_id] = 0  # 原材料格状态 二进制位表描述，例如 48(110000)表示拥有物品 4 和 5。
+        self.product_status = {}
         self.pos = (0, 0)
         if self._type <= 7:
-            self.product_id[self._type] = 0  # 产品格状态
+            self.product_status[self._type] = 0  # 产品格状态
 
     def get_pos(self):
         return self.pos
@@ -148,23 +143,24 @@ class Workbench:
     def update_ingredient(self, param):
         if self.status_ingredient_value == param:
             return
-        for product_id in bench_type_need[self._type]:
-            if (1 << product_id) & param != 0:  # 拥有原材料
-                self.status_ingredient.add(product_id)
+        for pid in self.ingredient_status.keys():
+            if (1 << pid) & param != 0:  # 拥有原材料
+                self.ingredient_status[pid] = 1
             else:
-                add_request(Request(self.bid, product_id, product_buy_price[product_id]))  # 需要购买
+                self.ingredient_status[pid] = 0
+                add_request(Request(self.bid, pid, product_buy_price[pid]))  # 需要购买
 
-    def query_short_supply(self):
-        return self.status_ingredient.difference(bench_type_need[self._type])
+    # def query_short_supply(self):
+    #     return self.status_ingredient.difference(bench_type_need[self._type])
 
     # 需要先买后卖
     def update_product(self, param):
-        self.product_id[self._type] = param
-        if self.product_id[self._type] == 1:
+        self.product_status[self._type] = param
+        if self.product_status[self._type] == 1:
             add_request(Request(self.bid, self._type, -product_sell_price[self._type]))
 
     def has_product(self, pid):
-        if pid in self.product_id and self.product_id[self._type] == 1:
+        if pid in self.product_status and self.product_status[self._type] == 1:
             return True
         return False
 
@@ -174,7 +170,7 @@ class Workbench:
         :param pid: 产品id
         :return: 是否需要
         """
-        return pid in bench_type_need[self._type] and pid not in self.status_ingredient
+        return pid in self.ingredient_status.keys() and self.ingredient_status[pid] == 0
 
 
 robots = []
