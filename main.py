@@ -340,30 +340,37 @@ def choose_workbench():
     根据request_form来计算下一个移动目的地
     :return: 两个目的地，一个买，一个卖
     """
-    return 13, 20
+    return 13, 9
 
 
 def movement(rid, bid):
-    robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
     v0, w0 = robots[rid].get_v0(), robots[rid].get_w0()
     start_time, stop_time = 3, 100
-    line_speed, angular_speed = 4, math.pi
-    return start_time, stop_time, line_speed, angular_speed
-
-
-def movement2(rid, bid):
     robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
-    v0, w0 = robots[rid].get_v0(), robots[rid].get_w0()
-    start_time, stop_time = 3, 100
-    line_speed, angular_speed = 5.8, math.pi / 7
-    return start_time, stop_time, line_speed, angular_speed
-
+    line_accelerated_speed = line_accelerated_speed_hold if robots[rid].is_busy() else line_accelerated_speed_normal
+    angular_accelerated_speed = angular_accelerated_speed_hold if robots[rid].is_busy() else angular_accelerated_speed_normal
+    line_dst = distance_o(robot_pos, bench_pos)
+    direction = robots[rid].direction
+    x_dis, y_dis = bench_pos[0] - robot_pos[0], bench_pos[1] - robot_pos[1]
+    # log("line_speed_cur = %.3f--%.3f angular_speed_cur =  %.3f" % (line_speed_cur[0], line_speed_cur[1], angular_speed_cur))
+    # log("x_dis = %.3f  y_dis = %.3f /n" %(x_dis, y_dis))
+    if x_dis == 0:
+        angular_dst = math.pi
+    else:
+        angular_dst = (1 if x_dis > 0 else -1) * (math.atan(y_dis / x_dis) - direction)
+    log("angle_dst = %.3f" % (angular_dst))
+    line_speed = math.sqrt(v0 ** 2 + 2 * line_accelerated_speed * line_dst)
+    angular_speed = (-1 if angular_dst < 0 else 1) * math.sqrt(w0 ** 2 + angular_accelerated_speed * abs(angular_dst))
+    log("line_speed_cur = %.3f angular_speed_cur =  %.3f" % (line_speed, angular_speed))
+    return start_time, stop_time, min(line_speed, speed_forward_max), min(angular_speed, math.pi)
 
 def process():
     for robot in robots:
+        if robot.rid != 0:
+            continue
         if robot.is_busy():
             bid = robot.get_job()[0]
-            start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bid) if len(robot.jobs) == 2 else movement2(robot.rid, bid)
+            start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bid)
             schedule.add_job(Job(frame_id, robot.rid, bid, angular_speed, line_speed, start_task))
             continue
         # 选择平台，总共两个阶段
@@ -371,7 +378,7 @@ def process():
         # 进行线速度和角速度计算, 并添加任务，计算第一个阶段
         start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bench_id1)
         schedule.add_job(Job(start_time, robot.rid, bench_id1, angular_speed, line_speed, start_task))
-        robot.set_job([(bench_id1, 0, 1), (bench_id2, 1, 1)])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
+        robot.set_job([(bench_id1, 0, 3), (bench_id2, 1, 3)])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
 
 
 # ----------------------------------------
