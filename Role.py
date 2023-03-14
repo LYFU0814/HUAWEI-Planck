@@ -10,7 +10,7 @@ buyer = [[] for _ in range(8)]  # 需要i号产品的工作台列表
 # ----------------------------------------
 # 每个平台的订单表
 # ----------------------------------------
-request_form = [[], [], []]  # 0 位置表示购买需求， 1 位置表示售卖需求， 2 位置表示已接单
+request_form = [[], []]  # 0 位置表示购买需求， 1 位置表示售卖需求
 request_form_record = {}  # key 为 (bid, product_id), value 为(0->购买,1->售卖,2->已接,3->预定)
 
 
@@ -140,7 +140,7 @@ class Workbench:
         for product_id in bench_type_need[self._type]:
             self.ingredient_status[product_id] = 0  # 原材料格状态 二进制位表描述，例如 48(110000)表示拥有物品 4 和 5。
         self.product_status = {}
-        self.pos = (0, 0)
+        self.pos = (x, y)
         if self._type <= 7:
             self.product_status[self._type] = 0  # 产品格状态
 

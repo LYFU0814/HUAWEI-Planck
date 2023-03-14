@@ -27,46 +27,6 @@ schedule = Schedule()
 bench_bw_dis = {}  # {(bid1, bid2): 距离}
 
 
-def init_env():
-    graph = input_data()
-    log("初始化：", True)
-    bw = graph_width / len(graph[0]) / 2.0
-    bench_id = 0
-    robot_id = 0
-    for x, line in enumerate(graph):
-        for y, ch in enumerate(line):
-            if ch.isdigit():
-                w = Workbench(bench_id, int(ch), 0.5 * y + bw, 49.75 - 0.5 * x)
-                workbenches_category[int(ch)].append(w)
-                workbenches.append(w)
-                bench_id += 1
-            elif "A" == ch:
-                robots.append(Robot(robot_id, 0.5 * y + bw, 49.75 - 0.5 * x))
-                robot_id += 1
-    for bi, bench in enumerate(bench_type_need):
-        for pi in bench:
-            buyer[pi].extend([b.bid for b in workbenches_category[bi]])
-
-    for bid_1 in range(len(workbenches)):
-        bench_1 = workbenches[bid_1]
-        for bid_2 in range(bid_1 + 1, len(workbenches)):
-            bench_2 = workbenches[bid_2]
-            bench_bw_dis[(bench_1.bid, bench_2.bid)] = distance_m(bench_1.get_pos(), bench_2.get_pos())
-    finish()
-
-
-def input_data():
-    venue = []
-    while True:
-        line = sys.stdin.readline().strip('\n')
-        if "OK" == line:
-            break
-        elif "" == line:
-            sys.exit(0)
-        venue.append(line)
-    return venue
-
-
 def start_task(job):
     if job.speed_linear != robots[job.key[0]].speed_linear[0]:
         robots[job.key[0]].forward(job.speed_linear)
@@ -92,47 +52,6 @@ def stop_task(job):
     # schedule.cancel_job(job)
 
 
-def update_venue(data):
-    global money, frame_id
-    parser_arr = list(map(int, data[0].split(" ")))
-    frame_id, money = parser_arr[0], parser_arr[1]
-    bench_cnt = int(data[1])
-    line_cnt = 2
-    for index in range(bench_cnt):
-        parser_arr = list(map(float, data[line_cnt].split(" ")))
-        workbenches[index].update(parser_arr)
-        line_cnt += 1
-    for index in range(robot_size):
-        parser_arr = list(map(float, data[line_cnt].split(" ")))
-        robots[index].update(parser_arr)
-        line_cnt += 1
-
-
-def output_result():
-    log("传递指令开始---")
-    sys.stdout.write('%d\n' % frame_id)
-    log('%d' % frame_id)
-    for robot in robots:
-        for action, value in robot.action_list.items():
-            sys.stdout.write('%s %s\n' % (action, ' '.join(str(v) for v in value)))
-            log('%s %s' % (action, ' '.join(str(v) for v in value)))
-        robot.action_list.clear()
-    finish()
-    log("传递指令结束---")
-
-
-def finish():
-    sys.stdout.write('OK\n')
-    sys.stdout.flush()
-
-
-# def choose_workbench(rid):
-#     """
-#     根据request_form来计算下一个移动目的地,元组形式(x, y, z)
-#     :return: 两个目的地，先去第一个再去第二个，x表示目的平台id，y表示买卖，买，用0表示，卖用1表示, 第三位表示产品id
-#     """
-#
-#     return (13, 0, 3), (8, 1, 3)
 def choose_workbench(rid):
     """
     根据request_form来计算下一个移动目的地,元组形式(x, y, z)
@@ -277,6 +196,80 @@ def process():
         rcv_request(Request(job_1[0], job_1[2], -product_buy_price[job_1[2]]))
         rcv_request(Request(job_2[0], job_2[2], product_sell_price[job_2[2]]))
         robot.set_job([job_1, job_2])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
+
+
+def init_env():
+    graph = input_data()
+    log("初始化：", True)
+    bw = graph_width / len(graph[0]) / 2.0
+    bench_id = 0
+    robot_id = 0
+    for x, line in enumerate(graph):
+        for y, ch in enumerate(line):
+            if ch.isdigit():
+                w = Workbench(bench_id, int(ch), 0.5 * y + bw, 49.75 - 0.5 * x)
+                workbenches_category[int(ch)].append(w)
+                workbenches.append(w)
+                bench_id += 1
+            elif "A" == ch:
+                robots.append(Robot(robot_id, 0.5 * y + bw, 49.75 - 0.5 * x))
+                robot_id += 1
+    for bi, bench in enumerate(bench_type_need):
+        for pi in bench:
+            buyer[pi].extend([b.bid for b in workbenches_category[bi]])
+
+    for bid_1 in range(len(workbenches)):
+        bench_1 = workbenches[bid_1]
+        for bid_2 in range(bid_1 + 1, len(workbenches)):
+            bench_2 = workbenches[bid_2]
+            bench_bw_dis[(bench_1.bid, bench_2.bid)] = distance_m(bench_1.get_pos(), bench_2.get_pos())
+    finish()
+
+
+def input_data():
+    venue = []
+    while True:
+        line = sys.stdin.readline().strip('\n')
+        if "OK" == line:
+            break
+        elif "" == line:
+            sys.exit(0)
+        venue.append(line)
+    return venue
+
+
+def update_venue(data):
+    global money, frame_id
+    parser_arr = list(map(int, data[0].split(" ")))
+    frame_id, money = parser_arr[0], parser_arr[1]
+    bench_cnt = int(data[1])
+    line_cnt = 2
+    for index in range(bench_cnt):
+        parser_arr = list(map(float, data[line_cnt].split(" ")))
+        workbenches[index].update(parser_arr)
+        line_cnt += 1
+    for index in range(robot_size):
+        parser_arr = list(map(float, data[line_cnt].split(" ")))
+        robots[index].update(parser_arr)
+        line_cnt += 1
+
+
+def output_result():
+    log("传递指令开始---")
+    sys.stdout.write('%d\n' % frame_id)
+    log('%d' % frame_id)
+    for robot in robots:
+        for action, value in robot.action_list.items():
+            sys.stdout.write('%s %s\n' % (action, ' '.join(str(v) for v in value)))
+            log('%s %s' % (action, ' '.join(str(v) for v in value)))
+        robot.action_list.clear()
+    finish()
+    log("传递指令结束---")
+
+
+def finish():
+    sys.stdout.write('OK\n')
+    sys.stdout.flush()
 
 
 # ----------------------------------------
