@@ -7,171 +7,11 @@ import sys
 import re
 from Schedule import *
 from Parameter import *
+from Role import *
 
 
 product_from = {}
 frame_id = -1
-
-
-class Robot:
-    __slots__ = ['rid', 'take_type', 'factor_time_value', 'factor_collision_value', "bench_id", 'old_pos', 'jobs',
-                 'speed_angular', 'speed_linear', 'direction', 'pos', 'action_list']
-
-    def __init__(self, robot_id, x, y):
-        self.rid = robot_id
-        self.pos = (x, y)
-        self.direction = math.pi  # 弧度，范围[-π,π]。
-        self.take_type = 0  # 0 没有拿
-        self.factor_time_value = 0.0  # 时间价值系数 携带物品时为[0.8, 1]的浮点数，不携带物品时为0
-        self.factor_collision_value = 0.0  # 碰撞价值系数 携带物品时为[0.8, 1]的浮点数，不携带物品时为0。
-        self.speed_linear = (0.0, 0.0)  # x, y 方向线速度 设置前进速度，单位为米/秒。 - 正数表示前进 - 负数表示后退。
-        self.speed_angular = 0.0  # 设置旋转速度，单位为弧度/秒。 - 负数表示顺时针旋转 - 正数表示逆时针旋转。
-        self.action_list = {}  # key
-        self.bench_id = -1
-        self.jobs = []
-
-    def set_job(self, jobs):
-        self.jobs.extend(jobs)
-
-    def get_job(self):
-        """
-        获取当前工作
-        :return: (x, y, z) x: 工作台id，y: 0买入1卖出，z: 产品id
-        """
-        if len(self.jobs) > 0:
-            return self.jobs[0]
-
-    def finish_job(self):
-        if len(self.jobs) > 0:
-            self.jobs.pop(0)
-
-    def set_pos(self, x, y):
-        self.pos = (x, y)
-
-    def get_pos(self):
-        return self.pos
-
-    def forward(self, line_speed):
-        self.action_list["forward"] = [self.rid, line_speed]
-
-    def rotate(self, angle_speed):
-        self.action_list["rotate"] = [self.rid, angle_speed]
-
-    def buy(self):
-        self.action_list["buy"] = [self.rid]
-        self.finish_job()
-
-    def sell(self):
-        self.action_list["sell"] = [self.rid]
-        self.finish_job()
-
-    def destroy(self):
-        self.action_list["destroy"] = [self.rid]
-        self.finish_job()
-
-    def update(self, data):
-        self.bench_id = int(data[0])
-        self.take_type = int(data[1])
-        self.factor_time_value = data[2]
-        self.factor_collision_value = data[3]
-        self.speed_angular = data[4]
-        self.speed_linear = (data[5], data[6])
-        self.direction = data[7]
-        self.set_pos(data[8], data[9])
-        self.is_in_bench()
-
-    def is_busy(self):
-        return len(self.jobs) > 0
-
-    def is_in_bench(self):
-        if self.bench_id != -1:
-            log("location: " + str(self.bench_id) + "  job : " + str(self.get_job()))
-        if self.bench_id != -1 and self.get_job()[0] == self.bench_id:
-            if self.get_job()[1] == 0 and workbenches[self.bench_id].has_product(self.get_job()[2]):
-                self.buy()
-            elif self.get_job()[1] == 1 and workbenches[self.bench_id].need_product(self.get_job()[2]):
-                self.sell()
-
-    def get_v0(self):
-        """
-        :return: 线速度的初速度
-        """
-        return self.speed_linear[0]
-
-    def get_w0(self):
-        """
-        :return: 角速度的初速度
-        """
-        return self.speed_angular
-
-    def get_weight(self):
-        """
-        :return: 获得当前机器人重量
-        """
-        if self.take_type == 0:
-            return robot_weight_normal
-        else:
-            return robot_weight_hold
-
-
-class Workbench:
-    __slots__ = ['bid', 'pos', '_type', 'remaining_time', 'status_ingredient_value',
-                 'product_status', 'work_time', 'ingredient_status']
-
-    def __init__(self, bid, _type, x, y):
-        self.bid = bid
-        self._type = _type
-        self.work_time = bench_work_time[self._type]
-        self.remaining_time = self.work_time
-        self.status_ingredient_value = -1
-        self.ingredient_status = {}
-        for product_id in bench_type_need[self._type]:
-            self.ingredient_status[product_id] = 0  # 原材料格状态 二进制位表描述，例如 48(110000)表示拥有物品 4 和 5。
-        self.product_status = {}
-        self.pos = (0, 0)
-        if self._type <= 7:
-            self.product_status[self._type] = 0  # 产品格状态
-
-    def get_pos(self):
-        return self.pos
-
-    def update(self, arr):
-        self.pos = (arr[1], arr[2])
-        self.remaining_time = arr[3]
-        self.update_ingredient(int(arr[4]))
-        self.update_product(int(arr[5]))
-
-    def update_ingredient(self, param):
-        if self.status_ingredient_value == param:
-            return
-        for pid in self.ingredient_status.keys():
-            if (1 << pid) & param != 0:  # 拥有原材料
-                self.ingredient_status[pid] = 1
-            else:
-                self.ingredient_status[pid] = 0
-                add_request(Request(self.bid, pid, product_buy_price[pid]))  # 需要购买
-
-    # def query_short_supply(self):
-    #     return self.status_ingredient.difference(bench_type_need[self._type])
-
-    # 需要先买后卖
-    def update_product(self, param):
-        self.product_status[self._type] = param
-        if self.product_status[self._type] == 1:
-            add_request(Request(self.bid, self._type, -product_sell_price[self._type]))
-
-    def has_product(self, pid):
-        if pid in self.product_status and self.product_status[self._type] == 1:
-            return True
-        return False
-
-    def need_product(self, pid):
-        """
-        平台需要这个产品，并且原材料格为空
-        :param pid: 产品id
-        :return: 是否需要
-        """
-        return pid in self.ingredient_status.keys() and self.ingredient_status[pid] == 0
 
 
 def collision_detection(positions):
@@ -182,72 +22,12 @@ def collision_detection(positions):
     return distances
 
 
-robots = []
-workbenches = []
-workbenches_category = [[] for _ in range(10)]  # i类型工作台 = [b_1, b_2,...]
-buyer = [[] for _ in range(8)]  # 需要i号产品的工作台列表
 table_request = []
 schedule = Schedule()
-
-# ----------------------------------------
-# 每个平台的订单表
-# ----------------------------------------
-request_form = [[], []]  # 0 位置表示购买需求， 1 位置表示售卖需求
-request_form_record = {}  # key 为 (bid, product_id)
-
-
-def distance_m(pos_a, pos_b):  # 计算曼哈顿距离
-    return abs(pos_a[0] - pos_b[0]) + abs(pos_a[1] - pos_b[1])
-
-
-def distance_o(pos_a, pos_b):  # 计算欧式距离
-    return math.sqrt(abs(pos_a[0] - pos_b[0]) ** 2 + abs(pos_a[1] - pos_b[1]) ** 2)
-
-
-class Request:
-    __slots__ = ["key", "price", "relevant_bench"]
-
-    def __init__(self, bid, product_id, price):
-        self.key = (bid, product_id)
-        self.price = price  # 负表示买，正表示卖
-        if price < 0:  # 需要买了之后再卖，寻找卖家
-            self.relevant_bench = [wb.bid for wb in workbenches_category[product_id]]
-        else:  # 需要卖出去，寻找买家
-            self.relevant_bench = buyer[product_id]
-        sorted(self.relevant_bench, key=lambda oid: distance_m(workbenches[oid].get_pos(), workbenches[bid].get_pos()))
-
-    def __lt__(self, other):
-        if self.price != other.price:
-            return self.price > other.price  # 价格从大到小
-        else:
-            if len(self.relevant_bench) != len(other.relevant_bench):  # 相关平台按个数从大到小
-                return len(self.relevant_bench) > len(other.relevant_bench)
-
-    def __str__(self):
-        return " ".join(str(item) for item in (self.key, self.price, self.relevant_bench))
-
-
-def add_request(request):
-    if request.key in request_form_record:
-        return
-    if request.price < 0:
-        request_form[0].append(request)
-        request_form_record[request.key] = 0
-    else:
-        request_form[1].append(request)
-        request_form_record[request.key] = 1
-
-
-def del_request(request):
-    if request.key not in request_form_record:
-        return
-    _type = request_form_record[request.key]
-    request_form[_type].remove(request)
-    del request_form_record[request.key]
+bench_bw_dis = {}  # {(bid1, bid2): 距离}
 
 
 def init_env():
-    global robots
     graph = input_data()
     log("初始化：", True)
     bw = graph_width / len(graph[0]) / 2.0
@@ -266,6 +46,12 @@ def init_env():
     for bi, bench in enumerate(bench_type_need):
         for pi in bench:
             buyer[pi].extend([b.bid for b in workbenches_category[bi]])
+
+    for bid_1 in range(len(workbenches)):
+        bench_1 = workbenches[bid_1]
+        for bid_2 in range(bid_1 + 1, len(workbenches)):
+            bench_2 = workbenches[bid_2]
+            bench_bw_dis[(bench_1.bid, bench_2.bid)] = distance_m(bench_1.get_pos(), bench_2.get_pos())
     finish()
 
 
@@ -340,16 +126,117 @@ def finish():
     sys.stdout.flush()
 
 
-def choose_workbench():
+# def choose_workbench(rid):
+#     """
+#     根据request_form来计算下一个移动目的地,元组形式(x, y, z)
+#     :return: 两个目的地，先去第一个再去第二个，x表示目的平台id，y表示买卖，买，用0表示，卖用1表示, 第三位表示产品id
+#     """
+#
+#     return (13, 0, 3), (8, 1, 3)
+def choose_workbench(rid):
     """
     根据request_form来计算下一个移动目的地,元组形式(x, y, z)
     :return: 两个目的地，先去第一个再去第二个，x表示目的平台id，y表示买卖，买，用0表示，卖用1表示, 第三位表示产品id
+    request_form[0]//购买表,即产出表["key", "price", "relevant_bench"]
+    request_form[1]//售卖表，即收购表
     """
-    return (13, 0, 3), (8, 1, 3)
+    fin__buy_bid = 0
+    fin__buy_pid = 0
+    fin__sell_bid = 0
+    fin__sell_pid = 0
+    robot_position = robots[rid].get_pos()
+    if (len(request_form[0])) != 0:
+        product = cacula_product_score(request_form)  # 记录了每一条产品request的得分
+        MAX_P = product[0]
+        j = 0  # 记录是第几条订单
+        for i in range(len(product)):
+            if (product[i] > MAX_P):
+                MAX_P = product[i]
+                j = j + 1
+            else:
+                MAX_P = MAX_P
+                j = j
+        best_buy_bid, best_buy_pid = request_form[0][j].key[0], request_form[0][j].key[1]
+        best_buy_price, best_buy_relevant_bench = request_form[0][j].price, request_form[0][j].relevant_bench
+        fin__buy_bid, fin__buy_pid = best_buy_bid, best_buy_pid
+        ################################################
+        acq_score = []  # 保存收购request的得分，在最好的购买的基础上由差价+距离最近构成得分
+        for k in range(len(request_form[1])):
+            score = 0
+            if (best_buy_pid == request_form[1][k].key[1]):
+                score = score + profit_score(best_buy_price, request_form[1][k].price)
+            else:
+                score = score
+            for bid in range(len(best_buy_relevant_bench)):
+                if (request_form[0][j].key[0] == best_buy_relevant_bench[bid]):
+                    score = score - 10 * bid
+            acq_score.append(score)
+        MAX_a = acq_score[0]
+        num = 0
+        for m in range(len(acq_score)):
+            if (acq_score[m] > MAX_a):
+                MAX_a = acq_score[m]
+                num = num + 1
+            else:
+                MAX_a = MAX_a
+                num = num
+        best_sell_bid, best_sell_pid = request_form[1][num].key[0], request_form[1][num].key[1]
+        fin__sell_bid, fin__sell_pid = best_sell_bid, best_sell_pid
+        log("###############" + str(fin__buy_bid) + str(fin__buy_pid) + "#####################")
+        log("###############" + str(fin__sell_bid) + str(fin__sell_pid) + "#####################")
+    #########################################################
+
+    else:
+        closest = 20000
+        ori_bid = 0
+        # for cid in range(1, 4):  # 去距离最近的1-3台子等着
+        if (rid != 0):  # 为了使机器人分开，各去各的，0号机器人先随机去
+            for bench in (workbenches_category[rid]):
+                distance = int(distance_m(robot_position, bench.get_pos()))
+                if (distance < closest):
+                    closest = distance
+                    ori_bid = bench.bid
+                else:
+                    closest = closest
+                    ori_bid = ori_bid
+            fin__buy_bid, fin__buy_pid = ori_bid, workbenches[ori_bid].get_type()
+        else:
+            fin__buy_bid, fin__buy_pid = workbenches_category[3][0].bid, 3
+
+        for n in range(len(request_form[1])):
+            if (request_form[1][n].key[1] == fin__buy_pid):
+                fin__sell_bid, fin__sell_pid = request_form[1][n].key[0], request_form[1][n].key[1]
+                break;
+        log("###############" + str(fin__buy_bid) + str(fin__buy_pid) + "#####################")
+        log("###############" + str((fin__sell_bid)) + str(fin__sell_pid) + "#####################")
+    log("####################################")
+
+    return (fin__buy_bid, 0, fin__buy_pid), (fin__sell_bid, 1, fin__sell_pid)
+
+
+def profit_score(buy_price, sell_price):  # buy_price是一个负值
+    p_score = (sell_price + buy_price) / (-1 * buy_price)
+    p_score = p_score * 100
+    return p_score
+
+
+def cacula_product_score(request_form):
+    product = []
+    for i in range(len(request_form[0])):  # 计算每一个平台产出订单的得分，购买得分最高者
+        p_score = 0
+        bid, pid = request_form[0][i].key[0], request_form[0][i].key[1]
+        if (workbenches[bid].get_type() == 4 or workbenches[bid].get_type() == 5 or workbenches[bid].get_type() == 6 or
+                workbenches[bid].get_type() == 7):
+            p_score = p_score + 100
+        elif (workbenches[bid].get_type() == 1 or workbenches[bid].get_type() == 2 or workbenches[bid].get_type() == 3):
+            p_score = p_score + 50
+        else:
+            log("啊？")
+        product.append(p_score)
+    return product
 
 
 def movement(rid, bid):
-    robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
     v0, w0 = robots[rid].get_v0(), robots[rid].get_w0()
     start_time, stop_time = 3, 100
     robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
@@ -370,21 +257,25 @@ def movement(rid, bid):
     log("line_speed_cur = %.3f angular_speed_cur =  %.3f" % (line_speed, angular_speed))
     return start_time, stop_time, min(line_speed, speed_forward_max), min(angular_speed, math.pi)
 
+
 def process():
-    log(collision_detection([robot.get_pos() for robot in robots]))
+    # log(collision_detection([robot.get_pos() for robot in robots]))
     for robot in robots:
-        if robot.rid != 0:
-            continue
+        # if robot.rid != 0:
+        #     continue
         if robot.is_busy():
+            '''修正过程'''
             bid = robot.get_job()[0]
             start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bid)
             schedule.add_job(Job(frame_id, robot.rid, bid, angular_speed, line_speed, start_task))
             continue
         # 选择平台，总共两个阶段
-        job_1, job_2 = choose_workbench()
+        job_1, job_2 = choose_workbench(robot.rid)
         # 进行线速度和角速度计算, 并添加任务，计算第一个阶段
         start_time, stop_time, line_speed, angular_speed = movement(robot.rid, job_1[0])
         schedule.add_job(Job(frame_id, robot.rid, job_1, angular_speed, line_speed, start_task))
+        rcv_request(Request(job_1[0], job_1[2], -product_buy_price[job_1[2]]))
+        rcv_request(Request(job_2[0], job_2[2], product_sell_price[job_2[2]]))
         robot.set_job([job_1, job_2])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
 
 
@@ -395,10 +286,10 @@ def interact():
     data = input_data()
     update_venue(data)
     log("第%d帧：" % frame_id)
-    log("购买")
+    log("平台需要售卖")
     for request in request_form[0]:
         log(request)
-    log("售卖")
+    log("平台需要购买")
     for request in request_form[1]:
         log(request)
     process()
