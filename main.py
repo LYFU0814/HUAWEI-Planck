@@ -193,8 +193,6 @@ def process():
         # 进行线速度和角速度计算, 并添加任务，计算第一个阶段
         start_time, stop_time, line_speed, angular_speed = movement(robot.rid, job_1[0])
         schedule.add_job(Job(frame_id, robot.rid, job_1, angular_speed, line_speed, start_task))
-        rcv_request(Request(job_1[0], job_1[2], -product_buy_price[job_1[2]]))
-        rcv_request(Request(job_2[0], job_2[2], product_sell_price[job_2[2]]))
         robot.set_job([job_1, job_2])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
 
 

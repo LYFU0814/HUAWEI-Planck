@@ -32,6 +32,8 @@ class Robot:
         self.jobs = []
 
     def set_job(self, jobs):
+        rcv_request(Request(jobs[0][0], jobs[0][2], -product_buy_price[jobs[0][2]]))
+        rcv_request(Request(jobs[1][0], jobs[1][2], product_sell_price[jobs[1][2]]))
         self.jobs.extend(jobs)
 
     def get_job(self):
