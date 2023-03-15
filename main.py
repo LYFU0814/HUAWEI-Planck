@@ -156,25 +156,57 @@ def cacula_product_score(request_form):
 
 
 def movement(rid, bid):
+    robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
     v0, w0 = robots[rid].get_v0(), robots[rid].get_w0()
     start_time, stop_time = 3, 100
-    robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
-    line_accelerated_speed = line_accelerated_speed_hold if robots[rid].is_busy() else line_accelerated_speed_normal
-    angular_accelerated_speed = angular_accelerated_speed_hold if robots[rid].is_busy() else angular_accelerated_speed_normal
     line_dst = distance_o(robot_pos, bench_pos)
     direction = robots[rid].direction
     x_dis, y_dis = bench_pos[0] - robot_pos[0], bench_pos[1] - robot_pos[1]
-    # log("line_speed_cur = %.3f--%.3f angular_speed_cur =  %.3f" % (line_speed_cur[0], line_speed_cur[1], angular_speed_cur))
-    # log("x_dis = %.3f  y_dis = %.3f /n" %(x_dis, y_dis))
-    if x_dis == 0:
-        angular_dst = math.pi
-    else:
-        angular_dst = (1 if x_dis > 0 else -1) * (math.atan(y_dis / x_dis) - direction)
-    log("angle_dst = %.3f" % (angular_dst))
-    line_speed = math.sqrt(v0 ** 2 + 2 * line_accelerated_speed * line_dst)
-    angular_speed = (-1 if angular_dst < 0 else 1) * math.sqrt(w0 ** 2 + angular_accelerated_speed * abs(angular_dst))
-    log("line_speed_cur = %.3f angular_speed_cur =  %.3f" % (line_speed, angular_speed))
-    return start_time, stop_time, min(line_speed, speed_forward_max), min(angular_speed, math.pi)
+
+    if x_dis == 0 and y_dis == 0:
+        angular = 0
+    elif x_dis == 0 and y_dis > 0:
+        angular = math.pi / 2
+    elif x_dis == 0 and y_dis < 0:
+        angular = -math.pi / 2
+    elif x_dis > 0 and y_dis >= 0:
+        angular = math.atan(y_dis / x_dis)
+    elif x_dis < 0 and y_dis >= 0:
+        angular = math.pi + math.atan(y_dis / x_dis)
+    elif x_dis < 0 and y_dis <= 0:
+        angular = -math.pi + math.atan(y_dis / x_dis)
+    elif x_dis > 0 and y_dis <= 0:
+        angular = math.atan(y_dis / x_dis)
+    # else:
+    #     angular = math.atan(y_dis / x_dis)
+
+    log("angular %.3f" % angular)
+    log("direction %.3f" % direction)
+
+    if 0 <= angular <= math.pi and 0 <= direction <= math.pi:
+        if angular > direction:
+            flag = 1
+        else:
+            flag = -1
+    elif -math.pi <= angular <= 0 and -math.pi <= direction <= 0:
+        if angular > direction:
+            flag = 1
+        else:
+            flag = -1
+    elif 0 <= angular <= math.pi and -math.pi <= direction <= 0:
+        if angular - direction < math.pi:
+            flag = 1
+        else:
+            flag = -1
+    elif -math.pi <= angular <= 0 and 0 <= direction <= math.pi:
+        if direction - angular < math.pi:
+            flag = -1
+        else:
+            flag = 1
+    # else:
+    #     flag = 1
+
+    return start_time, stop_time, 6, flag * math.pi
 
 
 def process():
