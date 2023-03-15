@@ -219,7 +219,7 @@ def rcv_request(request):
     对订单进行接单、预定操作
     :param request: 订单描述
     """
-    if has_request(request):
+    if has_request(request.key) != -1:
         need_type = request_form_record[request.key]
         request_form[need_type].remove(request)
         # 此时暂时实际并没有放入2号数组
@@ -228,13 +228,15 @@ def rcv_request(request):
         request_form_record[request.key] = 3  # 预定
 
 
-def has_request(request):
+def has_request(key):
     """
     订单状态可接
-    :param request: 订单描述
+    :param key: 订单关键词
     """
-    return request.key in request_form_record and request_form_record[request.key] != 2 \
-                    and request_form_record[request.key] != 3
+    if key in request_form_record and request_form_record[key] != 2 and request_form_record[key] != 3:
+        return request_form_record[key]
+    else:
+        return -1
 
 
 def del_request(request):
