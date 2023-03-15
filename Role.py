@@ -47,7 +47,7 @@ class Robot:
     def finish_job(self):
         if len(self.jobs) > 0:
             job = self.jobs.pop(0)
-            del_request(Request(job[0], job[2], 0))
+            del_request((job[0], job[2]))
 
     def set_pos(self, x, y):
         self.pos = (x, y)
@@ -239,14 +239,17 @@ def has_request(key):
         return -1
 
 
-def del_request(request):
+def del_request(key):
     """
     删除订单
-    :param request: 订单描述
+    :param key: 订单描述
     """
-    if request.key not in request_form_record:
+    if key not in request_form_record:
         return
-    del request_form_record[request.key]
+    if request_form_record[key] == 0 or request_form_record[key] == 1:
+        req = Request(key[0], key[1], 0)
+        request_form[request_form_record[key]].remove(req)
+    del request_form_record[key]
 
 
 class Request:
@@ -269,7 +272,7 @@ class Request:
                 return len(self.relevant_bench) > len(other.relevant_bench)
 
     def __eq__(self, other):
-        return self.key == other.key and self.price == other.price and self.relevant_bench == other.relevant_bench
+        return self.key == other.key
 
     def __str__(self):
         return " ".join(str(item) for item in (self.key, self.price, self.relevant_bench))

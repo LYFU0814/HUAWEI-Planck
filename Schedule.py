@@ -2,7 +2,7 @@ from queue import Queue
 import heapq
 
 
-def log(content, clear = False):
+def log(content, clear=False):
     """
     打印每一帧的日志
     :param content: 打印内容
