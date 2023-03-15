@@ -123,14 +123,14 @@ def choose_workbench(rid):
             fin__buy_bid, fin__buy_pid = workbenches_category[3][0].bid, 3
 
         for n in range(len(request_form[1])):
-            if (request_form[1][n].key[1] == fin__buy_pid):
+            if request_form[1][n].key[1] == fin__buy_pid:
                 fin__sell_bid, fin__sell_pid = request_form[1][n].key[0], request_form[1][n].key[1]
                 break
         log("###############" + str(fin__buy_bid) + str(fin__buy_pid) + "#####################")
         log("###############" + str((fin__sell_bid)) + str(fin__sell_pid) + "#####################")
     log("####################################")
 
-    return (fin__buy_bid, 0, fin__buy_pid), (fin__sell_bid, 1, fin__sell_pid)
+    return (fin__buy_bid, 0, fin__buy_pid), (fin__sell_bid, 1, fin__buy_pid)
 
 
 def profit_score(buy_price, sell_price):  # buy_price是一个负值
@@ -217,21 +217,32 @@ def movement(rid, bid):
 
 def process():
     # log(collision_detection([robot.get_pos() for robot in robots]))
+    choose_workbench_time = 0
+    movement_time = 0
     for robot in robots:
         # if robot.rid != 0:
         #     continue
         if robot.is_busy():
             '''修正过程'''
             bid = robot.get_job()[0]
+            start = time.time()
             start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bid)
+            movement_time += time.time() - start
             schedule.add_job(Job(frame_id, robot.rid, bid, angular_speed, line_speed, start_task))
             continue
         # 选择平台，总共两个阶段
+        start = time.time()
         job_1, job_2 = choose_workbench(robot.rid)
+        choose_workbench_time += time.time() - start
         # 进行线速度和角速度计算, 并添加任务，计算第一个阶段
+        start = time.time()
         start_time, stop_time, line_speed, angular_speed = movement(robot.rid, job_1[0])
+        movement_time += time.time() - start
         schedule.add_job(Job(frame_id, robot.rid, job_1, angular_speed, line_speed, start_task))
         robot.set_job([job_1, job_2])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
+    if choose_workbench_time != 0:
+        log("choose_workbench()结束耗时：" + str(choose_workbench_time))
+    log("movement()结束耗时：" + str(movement_time))
 
 
 def init_env():
@@ -313,17 +324,28 @@ def finish():
 # ----------------------------------------
 def interact():
     data = input_data()
+    start = time.time()
     update_venue(data)
+    log("update_venue()结束耗时：" + str(time.time() - start))
+    start = time.time()
     log("第%d帧：" % frame_id)
-    log("平台需要售卖")
+    s = "平台需要售卖\n"
     for request in request_form[0]:
-        log(request)
-    log("平台需要购买")
+        s += str(request) + "\n"
+    s += "平台需要购买\n"
     for request in request_form[1]:
-        log(request)
+        s += str(request) + "\n"
+    log(s)
+    log("interval结束耗时：" + str(time.time() - start))
+    start = time.time()
     process()
+    log("process结束耗时：" + str(time.time() - start))
     schedule.running(frame_id)
     output_result()
+    total = time.time() - start
+    log("结束耗时：" + str(total))
+    if total > 0.0149:
+        log("timeout")
 
 
 init_env()

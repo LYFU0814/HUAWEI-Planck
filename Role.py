@@ -1,7 +1,6 @@
 from Parameter import *
 from Schedule import log
 
-
 robots = []
 workbenches = []
 workbenches_category = [[] for _ in range(10)]  # i类型工作台 = [b_1, b_2,...]
@@ -179,6 +178,11 @@ class Workbench:
             return True
         return False
 
+    def has_ingredient(self, pid):
+        if pid in self.ingredient_status and self.ingredient_status[self._type] == 1:
+            return True
+        return False
+
     def need_product(self, pid):
         """
         平台需要这个产品，并且原材料格为空
@@ -206,7 +210,7 @@ def add_request(request):
         else:
             request_form[1].append(request)
             request_form_record[request.key] = 1
-    elif request.key in request_form_record and request_form_record[request.key] == 3:
+    elif request.key in request_form_record and request_form_record[request.key] == 3:  # 预定订单变为已接订单
         request_form_record[request.key] = 2
 
 
@@ -217,20 +221,20 @@ def rcv_request(request):
     """
     if has_request(request):
         need_type = request_form_record[request.key]
-        log(request)
         request_form[need_type].remove(request)
         # 此时暂时实际并没有放入2号数组
-        request_form_record[request.key] = 2
+        request_form_record[request.key] = 2  # 已接订单列表
     elif workbenches[request.key[0]].relevant_product(request.key[1]):
         request_form_record[request.key] = 3  # 预定
 
 
 def has_request(request):
     """
-    判断是否已经发布过请求
+    订单状态可接
     :param request: 订单描述
     """
-    return request.key in request_form_record and request_form_record[request.key] != 2
+    return request.key in request_form_record and request_form_record[request.key] != 2 \
+                    and request_form_record[request.key] != 3
 
 
 def del_request(request):
