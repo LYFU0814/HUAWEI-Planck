@@ -203,8 +203,7 @@ def movement(rid, bid):
             flag = -1
         else:
             flag = 1
-    # else:
-    #     flag = 1
+
     line_speed = 6
     angular_speed = flag * math.pi
     if line_dst < 1 or abs(angular - direction) > math.pi / 2:
@@ -212,11 +211,6 @@ def movement(rid, bid):
             line_speed = -0.5
         else:
             line_speed = 1
-    # if abs(angular - direction) > math.pi / 4:
-    #     if v0 > 1:
-    #         line_speed = -1
-    #     else:
-    #         line_speed = 0.5
 
     return start_time, stop_time, line_speed, angular_speed
 
