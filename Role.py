@@ -1,5 +1,6 @@
 from Parameter import *
 from Schedule import log
+from collections import OrderedDict
 
 robots = []
 workbenches = []
@@ -9,8 +10,10 @@ buyer = [[] for _ in range(8)]  # 需要i号产品的工作台列表
 # ----------------------------------------
 # 每个平台的订单表
 # ----------------------------------------
-request_form = [[], []]  # 0 位置表示购买需求， 1 位置表示售卖需求
+request_form = {0: [], 1: []}  # 0 位置表示购买需求， 1 位置表示售卖需求
+request_form_1 = {0: OrderedDict(), 1: OrderedDict()}  # 0 位置表示购买需求， 1 位置表示售卖需求
 request_form_record = {}  # key 为 (bid, product_id), value 为(0->购买,1->售卖,2->已接,3->预定)
+stop_rcv_order = False
 
 
 class Robot:
@@ -169,16 +172,27 @@ class Workbench:
 
     # 需要先买后卖
     def update_product(self, param):
-        self.product_status[self._type] = param
-        if self.product_status[self._type] == 1:
-            add_request(Request(self.bid, self._type, -product_buy_price[self._type]))
+        if self._type in self.product_status:  # 确实成产该产品
+            self.product_status[self._type] = param
+            if self.product_status[self._type] == 1:
+                add_request(Request(self.bid, self._type, -product_buy_price[self._type]))
 
     def has_product(self, pid):
+        """
+        该平台是否已经生产出产品
+        :param pid: 产品id
+        :return: bool
+        """
         if pid in self.product_status and self.product_status[self._type] == 1:
             return True
         return False
 
     def has_ingredient(self, pid):
+        """
+        该平台是否需要原材料
+        :param pid: 产品id
+        :return: bool
+        """
         if pid in self.ingredient_status and self.ingredient_status[self._type] == 1:
             return True
         return False
@@ -203,15 +217,31 @@ def add_request(request):
     发布订单
     :param request: 订单描述
     """
+    if stop_rcv_order:
+        return
     if request.key not in request_form_record:
         if request.price < 0:
             request_form[0].append(request)
+            request_form_1[0][request.key] = request
             request_form_record[request.key] = 0
         else:
             request_form[1].append(request)
+            request_form_1[1][request.key] = request
             request_form_record[request.key] = 1
     elif request.key in request_form_record and request_form_record[request.key] == 3:  # 预定订单变为已接订单
         request_form_record[request.key] = 2
+
+    def put(key: tuple, value: Request, req: OrderedDict) -> None:
+        """
+        如果key已存在，则更新value并将节点提至队尾；
+        如果不存在，则向缓存中插入该键值对，
+        """
+        if key in req:
+            req.pop(key)  # 更新value,元素移动到队尾
+            req[key] = value
+            return
+        req[key] = value
+        return
 
 
 def rcv_request(request):
@@ -219,9 +249,12 @@ def rcv_request(request):
     对订单进行接单、预定操作
     :param request: 订单描述
     """
+    if stop_rcv_order:
+        return
     if has_request(request.key) != -1:
         need_type = request_form_record[request.key]
         request_form[need_type].remove(request)
+        del request_form_1[need_type][request.key]
         # 此时暂时实际并没有放入2号数组
         request_form_record[request.key] = 2  # 已接订单列表
     elif workbenches[request.key[0]].relevant_product(request.key[1]):
@@ -249,7 +282,21 @@ def del_request(key):
     if request_form_record[key] == 0 or request_form_record[key] == 1:
         req = Request(key[0], key[1], 0)
         request_form[request_form_record[key]].remove(req)
+        del request_form_1[request_form_record[key]][key]
     del request_form_record[key]
+
+
+def del_all_request():
+    """
+    删除所有订单
+    """
+    global stop_rcv_order
+    request_form[0].clear()
+    request_form_1[0].clear()
+    request_form[1].clear()
+    request_form_1[1].clear()
+    request_form_record.clear()
+    stop_rcv_order = True
 
 
 class Request:
@@ -258,11 +305,20 @@ class Request:
     def __init__(self, bid, product_id, price):
         self.key = (bid, product_id)
         self.price = price  # 负表示买，正表示卖
+        business = []
         if price < 0:  # 需要买了之后再卖，寻找买家
-            self.relevant_bench = buyer[product_id]
-        else:  # 寻找卖家
-            self.relevant_bench = [wb.bid for wb in workbenches_category[product_id]]
-        sorted(self.relevant_bench, key=lambda oid: distance_m(workbenches[oid].get_pos(), workbenches[bid].get_pos()))
+            business = buyer[product_id]
+        elif price > 0:  # 寻找卖家
+            business = workbenches_category[product_id] # [wb.bid for wb in workbenches_category[product_id]]
+        self.relevant_bench = None
+        try:
+            self.relevant_bench = sorted(business,
+                            key=lambda oid: bench_bw_dis[bid, oid] if bid < oid else bench_bw_dis[oid, bid])
+        except Exception:
+            log("Exception : curr bid is " + str(bid) + " relevant_bench: " + str(business))
+            log("Exception : request is " + str(self.key) + "   price is " + str(price))
+            log("Exception : business is " + str(business) )
+            log("Exception : buyer is " + str(buyer[product_id]) + " seller is : " + str(workbenches_category[product_id]))
 
     def __lt__(self, other):
         if self.price != other.price:
@@ -276,3 +332,23 @@ class Request:
 
     def __str__(self):
         return " ".join(str(item) for item in (self.key, self.price, self.relevant_bench))
+
+
+from queue import Queue
+class PriorityQueue:
+    def __init__(self, n):
+        self.queues = []
+        for i in n:
+            self.queues.append(Queue())
+
+    def get(self):
+        for q in self.queues:
+            if not q.empty():
+                return q.get()
+        return None
+
+    def put(self, req, priority):
+        self.queues[priority].append(req)
+
+    def del_all(self):
+        self.queues.clear()
