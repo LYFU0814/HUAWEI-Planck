@@ -212,10 +212,11 @@ def movement(rid, bid):
     robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
     v0, w0 = robots[rid].get_v0(), robots[rid].get_w0()
     start_time, stop_time = 3, 100
-    line_dst = distance_o(robot_pos, bench_pos)
+    line_dis = distance_o(robot_pos, bench_pos)
     direction = robots[rid].direction
     x_dis, y_dis = bench_pos[0] - robot_pos[0], bench_pos[1] - robot_pos[1]
 
+    #获取和目的节点的方向角
     if x_dis == 0 and y_dis == 0:
         angular = 0
     elif x_dis == 0 and y_dis > 0:
@@ -236,6 +237,8 @@ def movement(rid, bid):
     log("angular %.3f" % angular)
     log("direction %.3f" % direction)
     flag = 1
+
+    # 当前方向和方向角的关系
     if 0 <= angular <= math.pi and 0 <= direction <= math.pi:
         if angular > direction:
             flag = 1
@@ -258,12 +261,34 @@ def movement(rid, bid):
             flag = 1
 
     line_speed = 6
-    angular_speed = flag * math.pi
-    if line_dst < 1 or abs(angular - direction) > math.pi / 2:
+
+    if line_dis < 2:
+        angular_speed = flag * 1 * math.pi
+    else:
+        angular_speed = flag * 0.5 * math.pi
+
+    # 减速
+    if line_dis < 1 or abs(angular - direction) > 0.5 * math.pi:
         if v0 > 1:
-            line_speed = -0.5
+            line_speed = 0
         else:
             line_speed = 1
+
+    #碰撞检测
+    for robot_id in range(0, 4):
+        if robot_id == rid:
+            continue
+        else:
+            adj_robot_pos = robots[robot_id].get_pos()
+            adj_direction = robots[robot_id].direction
+            robots_angular = abs(direction - adj_direction)
+            robots_dis = distance_o(robot_pos, adj_robot_pos)
+            if robots_dis < 2 and robots_angular > 0.75 * math.pi and robots_angular < 1.25 * math.pi:
+                if robots[robot_id].speed_linear[0] > 0 and (robots[rid].take_type == 0 and robots[robot_id].take_type == 1):
+                    line_speed = -2
+                else:
+                    line_speed = 4
+                angular_speed = - flag * math.pi
 
     return start_time, stop_time, line_speed, angular_speed
 
