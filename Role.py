@@ -4,8 +4,6 @@ from collections import OrderedDict
 
 robots = []
 workbenches = []
-workbenches_category = [[] for _ in range(10)]  # i类型工作台 = [b_1, b_2,...]
-buyer = [[] for _ in range(8)]  # 需要i号产品的工作台列表
 
 # ----------------------------------------
 # 每个平台的订单表
@@ -33,8 +31,8 @@ class Robot:
         self.jobs = []
 
     def set_job(self, jobs):
-        rcv_request(Request(jobs[0][0], jobs[0][2], -product_buy_price[jobs[0][2]]))
-        rcv_request(Request(jobs[1][0], jobs[1][2], product_sell_price[jobs[1][2]]))
+        rcv_request((jobs[0][0], jobs[0][2]))
+        rcv_request((jobs[1][0], jobs[1][2]))
         self.jobs.extend(jobs)
 
     def get_job(self):
@@ -190,6 +188,9 @@ class Workbench:
             return True
         return False
 
+    def get_remaining_time(self):
+        return self.remaining_time
+
     def has_ingredient(self, pid):
         """
         该平台是否需要原材料
@@ -245,20 +246,20 @@ def add_request(request):
         return
 
 
-def rcv_request(request):
+def rcv_request(key):
     """
     对订单进行接单、预定操作
-    :param request: 订单描述
+    :param key: 订单关键词
     """
     if stop_rcv_order:
         return
-    if has_request(request.key) != -1:
-        need_type = request_form_record[request.key]
-        del request_form[need_type][request.key]
+    if has_request(key) != -1:
+        need_type = request_form_record[key]
+        del request_form[need_type][key]
         # 此时暂时实际并没有放入2号数组
-        request_form_record[request.key] = 2  # 已接订单列表
-    elif workbenches[request.key[0]].relevant_product(request.key[1]):
-        request_form_record[request.key] = 3  # 预定
+        request_form_record[key] = 2  # 已接订单列表
+    elif workbenches[key[0]].relevant_product(key[1]):
+        request_form_record[key] = 3  # 预定
 
 
 def has_request(key):
@@ -280,7 +281,6 @@ def del_request(key):
     if key not in request_form_record:
         return
     if request_form_record[key] == 0 or request_form_record[key] == 1:
-        req = Request(key[0], key[1], 0)
         del request_form[request_form_record[key]][key]
     del request_form_record[key]
 
@@ -306,16 +306,8 @@ class Request:
         if price < 0:  # 需要买了之后再卖，寻找买家
             business = buyer[product_id]
         elif price > 0:  # 寻找卖家
-            business = workbenches_category[product_id] # [wb.bid for wb in workbenches_category[product_id]]
-        self.relevant_bench = None
-        try:
-            self.relevant_bench = sorted(business,
-                            key=lambda oid: bench_bw_dis[bid, oid] if bid < oid else bench_bw_dis[oid, bid])
-        except Exception:
-            log("Exception : curr bid is " + str(bid) + " relevant_bench: " + str(business))
-            log("Exception : request is " + str(self.key) + "   price is " + str(price))
-            log("Exception : business is " + str(business) )
-            log("Exception : buyer is " + str(buyer[product_id]) + " seller is : " + str(workbenches_category[product_id]))
+            business = workbenches_category[product_id]  # [wb.bid for wb in workbenches_category[product_id]]
+        self.relevant_bench = sorted(business, key=lambda oid: get_bench_bw_dis(bid, oid))
 
     def __lt__(self, other):
         if self.price != other.price:
