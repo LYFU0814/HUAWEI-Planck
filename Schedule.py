@@ -86,7 +86,8 @@ class Schedule:
 
     def echo(self):
         for job in self.jobs_start:
-            log(job)
+            pass
+            # log(job)
 
 
 # def start_task(job):

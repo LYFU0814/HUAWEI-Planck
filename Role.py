@@ -93,7 +93,7 @@ class Robot:
     def is_in_bench(self):
         if self.bench_id != -1:
             log("location: " + str(self.bench_id) + "  job : " + str(self.get_job()))
-        if self.bench_id != -1 and self.get_job()[0] == self.bench_id:
+        if self.bench_id != -1 and self.is_busy() and self.get_job()[0] == self.bench_id:
             if self.get_job()[1] == 0 and workbenches[self.bench_id].has_product(self.get_job()[2]):
                 self.buy()
             elif self.get_job()[1] == 1 and workbenches[self.bench_id].need_product(self.get_job()[2]):

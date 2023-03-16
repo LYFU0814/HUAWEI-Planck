@@ -40,19 +40,23 @@ def choose_workbench(rid):
     if (len(request_form_1[0])) != 0:
         product = cacula_product_score(rid)  # 记录了每一条产品request的得分
         # MAX_P = product[0]
-        MAX_P = -100000
+        MAX_P = -10000
         MAX_KEY = None  # 记录是第几条订单
 
         for key in product.keys():
             if product[key] > MAX_P:
                 MAX_P = product[key]
                 MAX_KEY = key
-
+        if (MAX_P == -10000):
+            return None, None
+        else:
+            best_buy_bid, best_buy_pid = MAX_KEY[0], MAX_KEY[1]
+            best_buy_price, best_buy_relevant_bench = request_form_1[0][MAX_KEY].price, request_form_1[0][
+                MAX_KEY].relevant_bench
         # lyz modify
         # best_buy_bid, best_buy_pid = request_form[0][j].key[0], request_form[0][j].key[1]
         # best_buy_price, best_buy_relevant_bench = request_form[0][j].price, request_form[0][j].relevant_bench
-        best_buy_bid, best_buy_pid = MAX_KEY[0], MAX_KEY[1]
-        best_buy_price, best_buy_relevant_bench = request_form_1[0][MAX_KEY].price, request_form_1[0][MAX_KEY].relevant_bench
+
 
         fin__buy_bid, fin__buy_pid = best_buy_bid, best_buy_pid
         ################################################
@@ -76,7 +80,7 @@ def choose_workbench(rid):
                         order_key[0]].get_type() == 6):
                         score = score + 100
                 else:
-                    score = -1000
+                    score = -10000
                 acq_score[order_key] = score
             MAX_A = -10000
             MAX_A_KEY = None
@@ -85,8 +89,10 @@ def choose_workbench(rid):
                 if acq_score[key] > MAX_A:
                     MAX_A = acq_score[key]
                     MAX_A_KEY = key
-
-            fin__sell_bid, fin__sell_pid = MAX_A_KEY[0], fin__buy_pid
+            if(MAX_A == -10000 ):
+                return None, None
+            else:
+                fin__sell_bid, fin__sell_pid = MAX_A_KEY[0], fin__buy_pid
 
         else:
             while (1):
@@ -194,7 +200,7 @@ def cacula_product_score(rid):
             if order1_key[1] == pid:
                 temp_score = temp_score + 100
         if (temp_score == 0):
-            p_score = -1000
+            p_score = -10000
         else:
             p_score = p_score + temp_score
 
