@@ -10,8 +10,7 @@ buyer = [[] for _ in range(8)]  # 需要i号产品的工作台列表
 # ----------------------------------------
 # 每个平台的订单表
 # ----------------------------------------
-request_form = {0: [], 1: []}  # 0 位置表示购买需求， 1 位置表示售卖需求
-request_form_1 = {0: OrderedDict(), 1: OrderedDict()}  # 0 位置表示购买需求， 1 位置表示售卖需求
+request_form = {0: OrderedDict(), 1: OrderedDict()}  # 0 位置表示购买需求， 1 位置表示售卖需求
 request_form_record = {}  # key 为 (bid, product_id), value 为(0->购买,1->售卖,2->已接,3->预定)
 stop_rcv_order = False
 
@@ -152,6 +151,10 @@ class Workbench:
         return self.pos
 
     def update(self, arr):
+        """
+        更新平台当前信息
+        :param arr: 输入数据
+        """
         self.pos = (arr[1], arr[2])
         self.remaining_time = arr[3]
         self.update_ingredient(int(arr[4]))
@@ -221,12 +224,10 @@ def add_request(request):
         return
     if request.key not in request_form_record:
         if request.price < 0:
-            request_form[0].append(request)
-            request_form_1[0][request.key] = request
+            request_form[0][request.key] = request
             request_form_record[request.key] = 0
         else:
-            request_form[1].append(request)
-            request_form_1[1][request.key] = request
+            request_form[1][request.key] = request
             request_form_record[request.key] = 1
     elif request.key in request_form_record and request_form_record[request.key] == 3:  # 预定订单变为已接订单
         request_form_record[request.key] = 2
@@ -253,8 +254,7 @@ def rcv_request(request):
         return
     if has_request(request.key) != -1:
         need_type = request_form_record[request.key]
-        request_form[need_type].remove(request)
-        del request_form_1[need_type][request.key]
+        del request_form[need_type][request.key]
         # 此时暂时实际并没有放入2号数组
         request_form_record[request.key] = 2  # 已接订单列表
     elif workbenches[request.key[0]].relevant_product(request.key[1]):
@@ -281,8 +281,7 @@ def del_request(key):
         return
     if request_form_record[key] == 0 or request_form_record[key] == 1:
         req = Request(key[0], key[1], 0)
-        request_form[request_form_record[key]].remove(req)
-        del request_form_1[request_form_record[key]][key]
+        del request_form[request_form_record[key]][key]
     del request_form_record[key]
 
 
@@ -292,9 +291,7 @@ def del_all_request():
     """
     global stop_rcv_order
     request_form[0].clear()
-    request_form_1[0].clear()
     request_form[1].clear()
-    request_form_1[1].clear()
     request_form_record.clear()
     stop_rcv_order = True
 

@@ -8,12 +8,11 @@ def log(content, clear=False):
     :param content: 打印内容
     :param clear: 是否清空文件
     """
-    pass
-    # with open("log.txt", mode='a+', encoding='utf-8') as file:
-    #     if clear:
-    #         file.truncate(0)
-    #     file.write(str(content))
-    #     file.write("\n")
+    with open("log.txt", mode='a+', encoding='utf-8') as file:
+        if clear:
+            file.truncate(0)
+        file.write(str(content))
+        file.write("\n")
 
 
 class Job:

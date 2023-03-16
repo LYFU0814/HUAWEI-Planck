@@ -37,7 +37,7 @@ def choose_workbench(rid):
     fin__sell_bid = 0
     fin__sell_pid = 0
     robot_position = robots[rid].get_pos()
-    if (len(request_form_1[0])) != 0:
+    if (len(request_form[0])) != 0:
         product = cacula_product_score(rid)  # 记录了每一条产品request的得分
         # MAX_P = product[0]
         MAX_P = -10000
@@ -51,28 +51,18 @@ def choose_workbench(rid):
             return None, None
         else:
             best_buy_bid, best_buy_pid = MAX_KEY[0], MAX_KEY[1]
-            best_buy_price, best_buy_relevant_bench = request_form_1[0][MAX_KEY].price, request_form_1[0][
+            best_buy_price, best_buy_relevant_bench = request_form[0][MAX_KEY].price, request_form[0][
                 MAX_KEY].relevant_bench
-        # lyz modify
-        # best_buy_bid, best_buy_pid = request_form[0][j].key[0], request_form[0][j].key[1]
-        # best_buy_price, best_buy_relevant_bench = request_form[0][j].price, request_form[0][j].relevant_bench
-
 
         fin__buy_bid, fin__buy_pid = best_buy_bid, best_buy_pid
         ################################################
-        if (len(request_form_1[1])) != 0:
+        if (len(request_form[1])) != 0:
             acq_score = {}  # 保存收购request的得分，在最好的购买的基础上由差价+距离最近构成得分
-            # TODO lyz modify
-            # for k in range(len(request_form[1])):
-            for order_key in request_form_1[1].keys():  # order1 == request.key()
+            for order_key in request_form[1].keys():  # order1 == request.key()
                 score = 1000
-                # TODO lyz modify
-                # if (best_buy_pid == request_form[1][k].key[1]):
                 if (best_buy_pid == order_key[1]):
                     # score = score + profit_score(best_buy_price, request_form[1][k].price)  # 利润得分
                     for x in range(len(best_buy_relevant_bench)):  # 距离得分
-                        # TODO lyz modify
-                        # if (request_form[1][k].key[0] == best_buy_relevant_bench[x]):
                         if (order_key[0] == best_buy_relevant_bench[x]):
                             score = score - 20 * x
                     if (workbenches[order_key[0]].get_type() == 4 or workbenches[
@@ -89,14 +79,14 @@ def choose_workbench(rid):
                 if acq_score[key] > MAX_A:
                     MAX_A = acq_score[key]
                     MAX_A_KEY = key
-            if(MAX_A == -10000 ):
+            if (MAX_A == -10000):
                 return None, None
             else:
                 fin__sell_bid, fin__sell_pid = MAX_A_KEY[0], fin__buy_pid
 
         else:
             while (1):
-                if len(request_form_1[1]) == 0:
+                if len(request_form[1]) == 0:
                     fin__sell_bid, fin__sell_pid = None, None
                 else:
                     break
@@ -104,17 +94,12 @@ def choose_workbench(rid):
         # log("###############" + str(fin__buy_bid) + str(fin__buy_pid) + "#####################")
         # log("###############" + str((fin__sell_bid)) + str(fin__sell_pid) + "#####################")
 
-
-    else:
+    elif not stop_rcv_order:
         closest = 20000
         ori_bid = 0
         # for cid in range(1, 4):  # 去距离最近的1-3台子等着
         if (rid != 3):  # 为了使机器人分开，各去各的，0号机器人先随机去
-            # TODO lyz modify
-            # for bench in (workbenches_category[rid + 1]):
             for bid in (workbenches_category[rid + 1]):
-                # TODO lyz modify
-                # distance = int(distance_m(robot_position, bench.get_pos()))
                 distance = int(distance_m(robot_position, workbenches[bid].get_pos()))
                 if (distance < closest):
                     closest = distance
@@ -125,24 +110,13 @@ def choose_workbench(rid):
 
             fin__buy_bid, fin__buy_pid = ori_bid, workbenches[ori_bid].get_type()
         else:
-            # TODO lyz modify
-            # if robots[1].get_job()[0] != workbenches_category[1][0].bid:
-            #     fin__buy_bid, fin__buy_pid = workbenches_category[1][0].bid, 1
-            # else:
-            #     fin__buy_bid, fin__buy_pid = workbenches_category[1][1].bid, 1
             if robots[1].get_job()[0] != workbenches_category[1][0]:
                 fin__buy_bid, fin__buy_pid = workbenches_category[1][0], 1
             else:
                 fin__buy_bid, fin__buy_pid = workbenches_category[1][1], 1
 
-        # TODO lyz modify
-        # for n in range(len(request_form[1])):
-        for order_key in request_form_1[1].keys():
-            # TODO lyz modify
-            # if request_form[1][n].key[1] == fin__buy_pid:
+        for order_key in request_form[1].keys():
             if order_key[1] == fin__buy_pid:
-                # TODO lyz modify
-                # fin__sell_bid, fin__sell_pid = request_form[1][n].key[0], request_form[1][n].key[1]
                 fin__sell_bid, fin__sell_pid = order_key[0], order_key[1]
                 break
         # log("$$$$$$$$$$$$$$$" + str(fin__buy_bid) + str(fin__buy_pid) + "$$$$$$$$$$$$$$$")
@@ -176,30 +150,22 @@ def profit_score(buy_price, sell_price):  # buy_price是一个负值
 def cacula_product_score(rid):
     product = {}
     robot_position = robots[rid].get_pos()
-    # TODO lyz modify
-    # for i in range(len(request_form[0])):  # 计算每一个平台产出订单的得分，购买得分最高者
-    for order0_key in request_form_1[0].keys():  # 计算每一个平台产出订单的得分，购买得分最高者
+    for order0_key in request_form[0].keys():  # 计算每一个平台产出订单的得分，购买得分最高者
         p_score = 0
-        # TODO lyz modify
-        # bid, pid = request_form[0][i].key[0], request_form[0][i].key[1]
         bid, pid = order0_key[0], order0_key[1]
         distance = distance_m(robot_position, workbenches[bid].get_pos())
         p_score = p_score + 200 - distance  # 距离机器人此时距离得分权重最大
-        if ( workbenches[bid].get_type() == 7):#台子产品处理的优先级权重较小
+        if (workbenches[bid].get_type() == 7):  # 台子产品处理的优先级权重较小
             p_score = p_score + 120
-        elif(workbenches[bid].get_type() == 4 or workbenches[bid].get_type() == 5 or workbenches[bid].get_type() == 6):
+        elif workbenches[bid].get_type() in (4, 5, 6):
             p_score = p_score + 50
-        elif (workbenches[bid].get_type() == 1 or workbenches[bid].get_type() == 2 or workbenches[bid].get_type() == 3):
+        elif workbenches[bid].get_type() in (1, 2, 3):
             p_score = p_score + 40
         temp_score = 0
-        # TODO lyz modify
-        # for j in range(len(request_form[1])):#平台需求量大的产品订单加分，无需求订单的产品订单直接变0分
-        for order1_key in request_form_1[1].keys():  # 平台需求量大的产品订单加分，无需求订单的产品订单直接变0分
-            # TODO lyz modify
-            # if (request_form[1][j].key[1] == pid):
+        for order1_key in request_form[1].keys():  # 平台需求量大的产品订单加分，无需求订单的产品订单直接变0分
             if order1_key[1] == pid:
                 temp_score = temp_score + 100
-        if (temp_score == 0):
+        if temp_score == 0:
             p_score = -10000
         else:
             p_score = p_score + temp_score
@@ -216,7 +182,7 @@ def movement(rid, bid):
     direction = robots[rid].direction
     x_dis, y_dis = bench_pos[0] - robot_pos[0], bench_pos[1] - robot_pos[1]
 
-    #获取和目的节点的方向角
+    # 获取和目的节点的方向角
     if x_dis == 0 and y_dis == 0:
         angular = 0
     elif x_dis == 0 and y_dis > 0:
@@ -274,7 +240,7 @@ def movement(rid, bid):
         else:
             line_speed = 1
 
-    #碰撞检测
+    # 碰撞检测
     for robot_id in range(0, 4):
         if robot_id == rid:
             continue
@@ -284,7 +250,8 @@ def movement(rid, bid):
             robots_angular = abs(direction - adj_direction)
             robots_dis = distance_o(robot_pos, adj_robot_pos)
             if robots_dis < 2 and robots_angular > 0.75 * math.pi and robots_angular < 1.25 * math.pi:
-                if robots[robot_id].speed_linear[0] > 0 and (robots[rid].take_type == 0 and robots[robot_id].take_type == 1):
+                if robots[robot_id].speed_linear[0] > 0 and (
+                        robots[rid].take_type == 0 and robots[robot_id].take_type == 1):
                     line_speed = -2
                 else:
                     line_speed = 4
@@ -303,14 +270,6 @@ def start_task(job):
 
 
 def stop_task(job):
-    # TODO
-    # 判断是否到达平台
-
-    # 判断购入或者卖出
-    # robots[job.key[0]].sell()
-    # robots[job.key[0]].buy()
-
-    # 是否进行下次任务
     if robots[job.key[0]].speed_linear != 0:
         robots[job.key[0]].forward(0)
     if robots[job.key[0]].speed_angular != 0:
@@ -334,7 +293,7 @@ def process():
             start = time.time()
             start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bid)
             movement_time += time.time() - start
-            schedule.add_job(Job(frame_id, robot.rid, bid, angular_speed, line_speed, start_task))
+            schedule.add_job(Job(frame_id, robot.rid, robot.get_job(), angular_speed, line_speed, start_task))
             continue
         # 选择平台，总共两个阶段
         start = time.time()
@@ -379,7 +338,7 @@ def init_env():
         for bid_2 in range(bid_1 + 1, len(workbenches)):
             bench_2 = workbenches[bid_2]
             bench_bw_dis[(bench_1.bid, bench_2.bid)] = distance_o(bench_1.get_pos(), bench_2.get_pos())
-    schedule.add_job(Job((duration * 60 - 3) * fps, 74, 74, 0, 0, clear_task))
+    schedule.add_job(Job((duration * 60 - 20) * fps, 74, 74, 0, 0, clear_task))
     finish()
 
 
