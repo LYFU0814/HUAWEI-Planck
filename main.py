@@ -103,6 +103,7 @@ def choose_workbench(rid):
 
     bench_1, bench_2 = (fin__buy_bid, 0, fin__buy_pid), (fin__sell_bid, 1, fin__buy_pid)
     log("choose job result : " + str(bench_1) + "  " + str(bench_2))
+    # return None, None
     return bench_1, bench_2
 
 
@@ -114,7 +115,6 @@ def profit_score(buy_price, sell_price):  # buy_price是一个负值
 
 
 def cacula_product_score(rid):
-
     product = {}
     robot_position = robots[rid].get_pos()
     for order0_key in request_form[0].keys():  # 计算每一个平台产出订单的得分，购买得分最高者
@@ -125,7 +125,7 @@ def cacula_product_score(rid):
         p_score = p_score / (distance ) #- 10 * yaw# 距离机器人此时距离得分权重最大
         if workbenches[bid].get_type() == 7: # 台子产品处理的优先级权重较小
             # temp
-            if frame_id > 8600:
+            if frame_id > 8000:
                 p_score = p_score - 1000
             else:
                 p_score = p_score + 1200
@@ -234,6 +234,7 @@ def movement(rid, bid):
 
     return start_time, stop_time, line_speed, angular_speed
 
+
 def movement1(rid, bid):
     robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
     v0, w0 = robots[rid].get_v0(), robots[rid].get_w0()
@@ -262,43 +263,19 @@ def movement1(rid, bid):
 
     log("angular %.3f" % angular)
     log("direction %.3f" % direction)
-    flag = 1
 
-    # 当前方向和方向角的关系
-    if 0 <= angular <= math.pi and 0 <= direction <= math.pi:
-        if angular > direction:
-            flag = 1
-        else:
-            flag = -1
-    elif -math.pi <= angular <= 0 and -math.pi <= direction <= 0:
-        if angular > direction:
-            flag = 1
-        else:
-            flag = -1
-    elif 0 <= angular <= math.pi and -math.pi <= direction <= 0:
-        if angular - direction < math.pi:
-            flag = 1
-        else:
-            flag = -1
-    elif -math.pi <= angular <= 0 and 0 <= direction <= math.pi:
-        if direction - angular < math.pi:
-            flag = -1
-        else:
-            flag = 1
+    yaw = get_clock_angle(robot_pos, bench_pos, direction)
 
-    line_speed = 6
-
-    if line_dis < 2:
-        angular_speed = flag * 1 * math.pi
+    if abs(yaw) > math.pi / 9:
+        angular_speed = (-1 if yaw < 0 else 1) * 1 * math.pi
+        line_speed = 4
     else:
-        angular_speed = flag * 0.5 * math.pi
+        angular_speed = (-1 if yaw < 0 else 1) * 0.2 * math.pi
+        line_speed = 6
 
-    # 减速
-    if line_dis < 1 or abs(angular - direction) > 0.5 * math.pi:
-        if v0 > 1:
-            line_speed = 0
-        else:
-            line_speed = 1
+    if line_dis < 1:
+        angular_speed = (-1 if yaw < 0 else 1) * 1 * math.pi
+        line_speed = 1
 
     # 碰撞检测
     for robot_id in range(0, 4):
@@ -310,12 +287,8 @@ def movement1(rid, bid):
             robots_angular = abs(direction - adj_direction)
             robots_dis = distance_o(robot_pos, adj_robot_pos)
             if robots_dis < 2 and robots_angular > 0.75 * math.pi and robots_angular < 1.25 * math.pi:
-                if robots[robot_id].speed_linear[0] > 0 and (
-                        robots[rid].take_type == 0 and robots[robot_id].take_type == 1):
-                    line_speed = -2
-                else:
-                    line_speed = 4
-                angular_speed = - flag * math.pi
+                line_speed = 4
+                angular_speed = w0 - 0.1 * math.pi
 
     return start_time, stop_time, line_speed, angular_speed
 
@@ -351,7 +324,7 @@ def process():
             '''修正过程'''
             bid = robot.get_job()[0]
             start = time.time()
-            start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bid)
+            start_time, stop_time, line_speed, angular_speed = movement1(robot.rid, bid)
             movement_time += time.time() - start
             schedule.add_job(Job(frame_id, robot.rid, robot.get_job(), angular_speed, line_speed, start_task))
             continue
@@ -360,17 +333,22 @@ def process():
         job_1, job_2 = choose_workbench(robot.rid)
         choose_workbench_time += time.time() - start
         if job_1 is None or job_2 is None:
-            schedule.add_job(Job(frame_id, robot.rid, None, 0, 0, stop_task))
+            # schedule.add_job(Job(frame_id, robot.rid, None, math.pi, 3, stop_task))
+            schedule.add_job(Job(frame_id + 100, robot.rid, None, 0, 0, stop_task))
             continue
         # 进行线速度和角速度计算, 并添加任务，计算第一个阶段
         start = time.time()
-        start_time, stop_time, line_speed, angular_speed = movement(robot.rid, job_1[0])
+        start_time, stop_time, line_speed, angular_speed = movement1(robot.rid, job_1[0])
         movement_time += time.time() - start
         schedule.add_job(Job(frame_id, robot.rid, job_1, angular_speed, line_speed, start_task))
         robot.set_job([job_1, job_2])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
     if choose_workbench_time != 0:
         log("choose_workbench()结束耗时：" + str(choose_workbench_time))
     log("movement()结束耗时：" + str(movement_time))
+
+
+def busy_to_idle_func(rid):
+    schedule.add_job(Job(frame_id, rid, None, math.pi / 4, 3, start_task))
 
 
 def init_env():
@@ -387,7 +365,7 @@ def init_env():
                 workbenches.append(w)
                 bench_id += 1
             elif "A" == ch:
-                robots.append(Robot(robot_id, 0.5 * y + bw, 49.75 - 0.5 * x))
+                robots.append(Robot(robot_id, 0.5 * y + bw, 49.75 - 0.5 * x, busy_to_idle_func))
                 robot_id += 1
     for bi, bench in enumerate(bench_type_need):
         for pi in bench:

@@ -15,9 +15,9 @@ stop_rcv_order = False
 
 class Robot:
     __slots__ = ['rid', 'take_type', 'factor_time_value', 'factor_collision_value', "bench_id", 'jobs',
-                 'speed_angular', 'speed_linear', 'direction', 'pos', 'action_list']
+                 'speed_angular', 'speed_linear', 'direction', 'pos', 'action_list', 'busy_to_idle_func']
 
-    def __init__(self, robot_id, x, y):
+    def __init__(self, robot_id, x, y, func):
         self.rid = robot_id
         self.pos = (x, y)
         self.direction = math.pi  # 弧度，范围[-π,π]。
@@ -29,11 +29,15 @@ class Robot:
         self.action_list = {}  # key
         self.bench_id = -1
         self.jobs = []
+        self.busy_to_idle_func = func
 
     def set_job(self, jobs):
         rcv_request((jobs[0][0], jobs[0][2]))
         rcv_request((jobs[1][0], jobs[1][2]))
         self.jobs.extend(jobs)
+
+    def set_busy_to_idle_func(self, func):
+        self.busy_to_idle_func = func
 
     def get_job(self):
         """
@@ -48,6 +52,8 @@ class Robot:
         if len(self.jobs) > 0:
             job = self.jobs.pop(0)
             del_request((job[0], job[2]))
+            if not self.is_busy() and self.busy_to_idle_func is not None:
+                self.busy_to_idle_func(self.rid)
 
     def set_pos(self, x, y):
         self.pos = (x, y)
