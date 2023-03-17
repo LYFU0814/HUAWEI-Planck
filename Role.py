@@ -216,6 +216,7 @@ class Workbench:
         return self._type
 
 
+product_demand_table = [0 for _ in range(8)]
 def add_request(request):
     """
     发布订单
@@ -230,6 +231,7 @@ def add_request(request):
         else:
             request_form[1][request.key] = request
             request_form_record[request.key] = 1
+            product_demand_table[request.key[1]] += 1
     elif request.key in request_form_record and request_form_record[request.key] == 3:  # 预定订单变为已接订单
         request_form_record[request.key] = 2
 
@@ -255,9 +257,11 @@ def rcv_request(key):
         return
     if has_request(key) != -1:
         need_type = request_form_record[key]
+        if request_form[need_type][key].price > 0:  # 产品需求减少
+            product_demand_table[key[1]] -= 1
         del request_form[need_type][key]
         # 此时暂时实际并没有放入2号数组
-        request_form_record[key] = 2  # 已接订单列表
+        request_form_record[key] = 2  # 已接订单列表，request_form没有2，3类型的字段，所以request，此处只为标识
     elif workbenches[key[0]].relevant_product(key[1]):
         request_form_record[key] = 3  # 预定
 
@@ -289,10 +293,11 @@ def del_all_request():
     """
     删除所有订单
     """
-    global stop_rcv_order
+    global stop_rcv_order, product_demand_table
     request_form[0].clear()
     request_form[1].clear()
     request_form_record.clear()
+    product_demand_table = [0 for _ in range(8)]
     stop_rcv_order = True
 
 

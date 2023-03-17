@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 # ----------------------------------------
 # 环境参数设置
@@ -32,6 +33,8 @@ bench_type_need = [[], [], [], [], [1, 2], [1, 3], [2, 3], [4, 5, 6], [7], [1, 2
 bench_bw_dis = {}  # 任意两个工作台之间的距离 {(bid1, bid2): 距离}
 workbenches_category = [[] for _ in range(10)]  # i类型工作台 = [b_1, b_2,...]
 buyer = [[] for _ in range(8)]  # 需要i号产品的工作台列表
+
+
 # ----------------------------------------
 
 
@@ -48,9 +51,62 @@ def get_bench_bw_dis(bid, oid):
     return bench_bw_dis[bid, oid] if bid < oid else bench_bw_dis[oid, bid]
 
 
+def get_category_size(bench_type):
+    """
+    获得某种类型工作台的数量
+    :param bench_type: 工作台类型
+    :return: 工作台数量
+    """
+    return len(workbenches_category[bench_type])
+
+
 def distance_m(pos_a, pos_b):  # 计算曼哈顿距离
     return abs(pos_a[0] - pos_b[0]) + abs(pos_a[1] - pos_b[1])
 
 
 def distance_o(pos_a, pos_b):  # 计算欧式距离
     return math.sqrt(abs(pos_a[0] - pos_b[0]) ** 2 + abs(pos_a[1] - pos_b[1]) ** 2)
+
+
+def get_clock_angle(pos_1, pos_2, dir):
+    """
+    计算最小偏向角
+    :param pos_1: 机器人位置
+    :param pos_2: 平台位置
+    :param dir: 机器人当前方向
+    :return: 最小偏向角，单位弧度，负表示顺时针，正表示逆时针
+    """
+    v1, v2 = [np.cos(dir), np.sin(dir)], [pos_2[0] - pos_1[0], pos_2[1] - pos_1[1]]
+    # 2个向量模的乘积
+    TheNorm = np.linalg.norm(v1) * np.linalg.norm(v2)
+    # 叉乘
+    rho = np.rad2deg(np.arcsin(np.cross(v1, v2) / TheNorm))
+    # 点乘
+    # theta = np.rad2deg(np.arccos(np.dot(v1,v2)/TheNorm))
+    theta = np.arccos(np.dot(v1, v2) / TheNorm)
+    if rho < 0:
+        return - theta
+    else:
+        return theta
+
+
+def get_workbench_angle(pos_1, pos_2, pos_3):
+    """
+    计算机器人从平台1到平台2的最小偏向角
+    :param pos_1: 机器人位置
+    :param pos_2: 平台1位置
+    :param pos_3: 平台2位置
+    :return: 最小偏向角，单位弧度，负表示顺时针，正表示逆时针
+    """
+    v1, v2 = [pos_2[0] - pos_1[0], pos_2[1] - pos_1[1]], [pos_3[0] - pos_2[0], pos_3[1] - pos_2[1]]
+    # 2个向量模的乘积
+    TheNorm = np.linalg.norm(v1) * np.linalg.norm(v2)
+    # 叉乘
+    rho = np.rad2deg(np.arcsin(np.cross(v1, v2) / TheNorm))
+    # 点乘
+    # theta = np.rad2deg(np.arccos(np.dot(v1,v2)/TheNorm))
+    theta = np.arccos(np.dot(v1, v2) / TheNorm)
+    if rho < 0:
+        return - theta
+    else:
+        return theta

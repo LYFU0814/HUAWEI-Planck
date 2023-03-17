@@ -40,8 +40,7 @@ class Job:
         return self.exist
 
     def __str__(self) -> str:
-        return " ".join(str(item) for item in (
-            self.start, self.key))
+        return " ".join(str(item) for item in (self.start, self.key))
 
 
 class Schedule:

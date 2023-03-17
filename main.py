@@ -35,10 +35,11 @@ def choose_workbench(rid):
     fin__buy_pid = 0
     fin__sell_bid = 0
     fin__sell_pid = 0
-
+    robot_position = robots[rid].get_pos()
     if (len(request_form[0])) != 0:
         product = cacula_product_score(rid)  # 记录了每一条产品request的得分
         # MAX_P = product[0]
+        log("#########"+ str(product)+"########")
         MAX_P = -10000
         MAX_KEY = None  # 记录是第几条订单
 
@@ -58,12 +59,16 @@ def choose_workbench(rid):
         if (len(request_form[1])) != 0:
             acq_score = {}  # 保存收购request的得分，在最好的购买的基础上由差价+距离最近构成得分
             for order_key in request_form[1].keys():  # order_key == request.key()
-                score = 1000
+                score = 10000
                 if (best_buy_pid == order_key[1]):
                     score = score + profit_score(best_buy_price, request_form[1][order_key].price)  # 利润得分
                     for x in range(len(best_buy_relevant_bench)):  # 距离得分
                         if (order_key[0] == best_buy_relevant_bench[x]):
-                            score = score - 20 * x
+                            yaw = abs(get_workbench_angle(robot_position, workbenches[best_buy_bid].get_pos(), workbenches[best_buy_relevant_bench[x]].get_pos()))
+                            #score = score - 20 * x #- yaw
+                            score = score /(20 * x + 1)
+
+
                     if (workbenches[order_key[0]].get_type() == 4 or workbenches[
                         order_key[0]].get_type() == 5 or workbenches[
                         order_key[0]].get_type() == 6):
@@ -73,7 +78,7 @@ def choose_workbench(rid):
                 acq_score[order_key] = score
             MAX_A = -10000
             MAX_A_KEY = None
-
+            log("#########" + str(acq_score) + "########")
             for key in acq_score.keys():
                 if acq_score[key] > MAX_A:
                     MAX_A = acq_score[key]
@@ -102,33 +107,36 @@ def choose_workbench(rid):
 
 
 def profit_score(buy_price, sell_price):  # buy_price是一个负值
+
     p_score = (sell_price + buy_price) / (-1 * buy_price)
     p_score = p_score * 100
     return p_score
 
 
 def cacula_product_score(rid):
+
     product = {}
     robot_position = robots[rid].get_pos()
     for order0_key in request_form[0].keys():  # 计算每一个平台产出订单的得分，购买得分最高者
-        p_score = 0
+        p_score = 10000
         bid, pid = order0_key[0], order0_key[1]
         distance = distance_m(robot_position, workbenches[bid].get_pos())
-        p_score = p_score + 200 - distance  # 距离机器人此时距离得分权重最大
+        yaw = abs(get_clock_angle(robot_position,  workbenches[bid].get_pos(), robots[rid].direction))
+        p_score = p_score / (distance ) #- 10 * yaw# 距离机器人此时距离得分权重最大
         if workbenches[bid].get_type() == 7: # 台子产品处理的优先级权重较小
             # temp
             if frame_id > 8600:
-                p_score = p_score - 100
+                p_score = p_score - 1000
             else:
-                p_score = p_score + 120
-        elif workbenches[bid].get_type() in (4, 5, 6):
-            p_score = p_score + 50
+                p_score = p_score + 1200
+        elif workbenches[bid].get_type() in (4, 5, 6) :
+            p_score = p_score + 800
         elif workbenches[bid].get_type() in (1, 2, 3):
-            p_score = p_score + 40
+            p_score = p_score + 400
         temp_score = 0
         for order1_key in request_form[1].keys():  # 平台需求量大的产品订单加分，无需求订单的产品订单直接变0分
             if order1_key[1] == pid:
-                temp_score = temp_score + 100
+                temp_score = temp_score + 200
         if (temp_score == 0):
             p_score = -10000
         else:
