@@ -36,7 +36,9 @@ def choose_workbench(rid):
     fin__sell_bid = 0
     fin__sell_pid = 0
     robot_position = robots[rid].get_pos()
-    if (len(request_form[0])) != 0:
+    # TODO: request_form[0]
+    request_form_0 = get_request_form(0)
+    if (len(request_form_0)) != 0:
         product = cacula_product_score(rid)  # 记录了每一条产品request的得分
         # MAX_P = product[0]
         log("#########" + str(product) + "########")
@@ -51,48 +53,24 @@ def choose_workbench(rid):
             return None, None
         else:
             best_buy_bid, best_buy_pid = MAX_KEY[0], MAX_KEY[1]
-            best_buy_price, best_buy_relevant_bench = request_form[0][MAX_KEY].price, request_form[0][
-                MAX_KEY].relevant_bench
+            # TODO: best_buy_price, best_buy_relevant_bench = request_form[0][MAX_KEY].price, request_form[0][MAX_KEY].relevant_bench
+            best_buy_relevant_bench = sorted(get_relevant_order_sell(best_buy_pid),
+                                             key=lambda oid: get_bench_bw_dis(best_buy_bid, oid))
 
         fin__buy_bid, fin__buy_pid = best_buy_bid, best_buy_pid
         ################################################
-        if (len(request_form[1])) != 0:
-            acq_score = {}  # 保存收购request的得分，在最好的购买的基础上由差价+距离最近构成得分
-            for order_key in request_form[1].keys():  # order_key == request.key()
-                score = 10000
-                if (best_buy_pid == order_key[1]):
-                    score = score + profit_score(best_buy_price, request_form[1][order_key].price)  # 利润得分
-                    for x in range(len(best_buy_relevant_bench)):  # 距离得分
-                        if (order_key[0] == best_buy_relevant_bench[x]):
-                            yaw = abs(get_workbench_angle(robot_position, workbenches[best_buy_bid].get_pos(),
-                                                          workbenches[best_buy_relevant_bench[x]].get_pos()))
-                            # score = score - 20 * x #- yaw
-                            score = score / (20 * x + 1)
-
-                    if workbenches[order_key[0]].get_type() in (4, 5, 6):
-                        score = score + 100
-                else:
-                    score = -10000
-                acq_score[order_key] = score
-            MAX_A = -10000
-            MAX_A_KEY = None
-            log("#########" + str(acq_score) + "########")
-            for key in acq_score.keys():
-                if acq_score[key] > MAX_A:
-                    MAX_A = acq_score[key]
-                    MAX_A_KEY = key
-            if (MAX_A == -10000):
-                return None, None
-            else:
-                fin__sell_bid, fin__sell_pid = MAX_A_KEY[0], fin__buy_pid
-
+        # TODO: request_form[1]
+        request_form_1 = get_request_form(1)
+        if (len(request_form_1)) != 0:
+            fin__sell_bid, fin__sell_pid = cacula_sell_score(best_buy_pid, best_buy_relevant_bench)
         else:
             while (1):
-                if len(request_form[1]) == 0:
+                # TODO: if len(request_form[1]) == 0:
+                if len(request_form_1) == 0:
                     fin__sell_bid, fin__sell_pid = None, None
                 else:
                     break
-    elif (len(request_form[1])) == 0:
+    elif (len(get_request_form(1))) == 0:
         # 双表空，最后几秒
         return None, None
     else:
@@ -105,8 +83,9 @@ def choose_workbench(rid):
     return bench_1, bench_2
 
 
-def profit_score(buy_price, sell_price):  # buy_price是一个负值
-    p_score = (sell_price + buy_price) / (-1 * buy_price)
+def profit_score(pid):  # buy_price是一个负值
+    # p_score = (sell_price + buy_price) / (-1 * buy_price)
+    p_score = get_product_profit(pid) / -product_buy_price[pid]
     p_score = p_score * 100
     return p_score
 
@@ -114,28 +93,29 @@ def profit_score(buy_price, sell_price):  # buy_price是一个负值
 def cacula_product_score(rid):
     product = {}
     robot_position = robots[rid].get_pos()
-    # 对订单打分
-    for order0_key in request_form[0].keys():  # 计算每一个平台产出订单的得分，购买得分最高者
-        # 初始分
+    # TODO:request_form[0]
+    request_form_0 = get_request_form(0)
+    for order0_key in request_form_0:  # 计算每一个平台产出订单的得分，购买得分最高者
         p_score = 10000
         bid, pid = order0_key[0], order0_key[1]
         distance = distance_m(robot_position, workbenches[bid].get_pos())
         yaw = abs(get_clock_angle(robot_position, workbenches[bid].get_pos(), robots[rid].direction))
-        # 对距离打分
         p_score = p_score / (distance)  # - 10 * yaw# 距离机器人此时距离得分权重最大
-        # 对产品类型打分
-        if workbenches[bid].get_type() == 7:  # 台子产品处理的优先级权重较小
-            # temp
-            if frame_id > 8000:
-                p_score = p_score - 1000
-            else:
-                p_score = p_score + 1200
-        elif workbenches[bid].get_type() in (4, 5, 6):
-            p_score = p_score + 800
-        elif workbenches[bid].get_type() in (1, 2, 3):
-            p_score = p_score + 400
-        # 对订单需求打分 平台需求量大的产品订单加分，无需求订单的产品订单直接变0分
-        temp_score = product_demand_table[pid] * 200
+        # if workbenches[bid].get_type() == 7: # 台子产品处理的优先级权重较小
+        #     # temp
+        #     if frame_id > 8000:
+        #         p_score = p_score - 1000
+        #     else:
+        #         p_score = p_score + 1200
+        # elif workbenches[bid].get_type() in (4, 5, 6) :
+        #     p_score = p_score + 800
+        # elif workbenches[bid].get_type() in (1, 2, 3):
+        #     p_score = p_score + 400
+        temp_score = 0
+        request_form_1 = get_request_form(1)
+        for order1_key in request_form_1:  # 平台需求量大的产品订单加分，无需求订单的产品订单直接变0分
+            if order1_key[1] == pid:
+                temp_score = temp_score + 200
         if (temp_score == 0):
             p_score = -10000
         else:
@@ -143,6 +123,40 @@ def cacula_product_score(rid):
 
         product[order0_key] = p_score
     return product
+
+
+def cacula_sell_score(best_buy_pid, best_buy_relevant_bench):
+    acq_score = {}  # 保存收购request的得分，在最好的购买的基础上由差价+距离最近构成得分
+    # TODO : for order_key in request_form[1].keys():  # order_key == request.key()
+    request_form_1 = get_request_form(1)
+    for order_key in request_form_1:  # order_key == request.key()
+        score = 10000
+        if (best_buy_pid == order_key[1]):
+            # TODO: score = score + profit_score(best_buy_price, request_form[1][order_key].price)  # 利润得分
+            score = score + profit_score(best_buy_pid)  # 利润得分
+            for x in range(len(best_buy_relevant_bench)):  # 距离得分
+                if (order_key[0] == best_buy_relevant_bench[x]):
+                    # yaw = abs(get_workbench_angle(robot_position, workbenches[best_buy_bid].get_pos(), workbenches[best_buy_relevant_bench[x]].get_pos()))
+                    # score = score - 20 * x #- yaw
+                    score = score / (20 * x + 1)
+
+            if workbenches[order_key[0]].get_type() in (4, 5, 6):
+                score = score + 100
+        else:
+            score = -10000
+        acq_score[order_key] = score
+    MAX_A = -10000
+    MAX_A_KEY = None
+    log("#########" + str(acq_score) + "########")
+    for key in acq_score.keys():
+        if acq_score[key] > MAX_A:
+            MAX_A = acq_score[key]
+            MAX_A_KEY = key
+    if (MAX_A == -10000):
+        return None, None
+    else:
+        fin__sell_bid, fin__sell_pid = MAX_A_KEY[0], best_buy_pid
+        return fin__sell_bid, fin__sell_pid
 
 
 def init_choice(rid):
@@ -166,12 +180,51 @@ def init_choice(rid):
         else:
             fin__buy_bid, fin__buy_pid = workbenches_category[1][1], 1
 
-    for order_key in request_form[1].keys():
+    # best_buy_relevant_bench = sorted(list(request_form[1][fin__buy_pid].keys()),
+    #                                  key=lambda oid: get_bench_bw_dis(fin__buy_bid, oid))
+    # if rid != 0:
+    #     fin__sell_bid, fin__sell_pid = best_buy_relevant_bench[0], fin__buy_pid
+    # else:
+    #     fin__sell_bid, fin__sell_pid = best_buy_relevant_bench[1], fin__buy_pid
+    request_form_1 = get_request_form(1)
+    for order_key in request_form_1:
         if order_key[1] == fin__buy_pid:
             fin__sell_bid, fin__sell_pid = order_key[0], order_key[1]
             break
 
     return fin__buy_bid, fin__buy_pid, fin__sell_bid, fin__sell_pid
+
+
+def by_way_bussiness(rid, final_buy_bid, new_bid, new_pid):  # 计算够不够顺风，够的话返回顺风job，不够的话返回none
+    """
+    :param rid: 机器人id
+    :param final_buy_bid: 要前往的目的地
+    :param new_bid: 产生新订单平台
+    :param new_pid: 产生新产品
+    :return: 工作
+    """
+    robot_position = robots[rid].get_pos()
+    log(get_relevant_order_sell(new_pid))
+    best_buy_relevant_bench = sorted(get_relevant_order_sell(new_pid), key=lambda oid: get_bench_bw_dis(new_bid, oid))
+    best_sell_bid, best_sell_pid = cacula_sell_score(new_pid, best_buy_relevant_bench)
+    distance_new = int(distance_o(robot_position, workbenches[new_bid].get_pos()))
+
+    distance_ori = int(distance_o(robot_position, workbenches[final_buy_bid].get_pos()))
+    log(str(best_sell_bid) + "  " + str(final_buy_bid))
+    # TODO:
+    if best_sell_bid is None:
+        return None, None
+
+    distance_sell = int(distance_o(workbenches[best_sell_bid].get_pos(), workbenches[final_buy_bid].get_pos()))
+    if ((distance_sell + distance_new) < 1.5 * distance_ori):
+        temporary_buy_bid, temporary_buy_pid = new_bid, new_pid
+        temporary_sell_bid, temporary_sell_pid = best_sell_bid, new_pid
+    else:
+        return None, None
+    bench_1, bench_2 = (temporary_buy_bid, 0, temporary_buy_pid), (temporary_sell_bid, 1, temporary_buy_pid)
+    log("choose job result : " + str(bench_1) + "  " + str(bench_2))
+    # return None, None
+    return bench_1, bench_2
 
 
 def movement(rid, bid):
@@ -332,7 +385,6 @@ def process():
         job_1, job_2 = choose_workbench(robot.rid)
         choose_workbench_time += time.time() - start
         if job_1 is None or job_2 is None:
-            # schedule.add_job(Job(frame_id, robot.rid, None, math.pi, 3, stop_task))
             schedule.add_job(Job(frame_id + 100, robot.rid, None, 0, 0, stop_task))
             continue
         # 进行线速度和角速度计算, 并添加任务，计算第一个阶段
@@ -340,7 +392,7 @@ def process():
         start_time, stop_time, line_speed, angular_speed = movement1(robot.rid, job_1[0])
         movement_time += time.time() - start
         schedule.add_job(Job(frame_id, robot.rid, job_1, angular_speed, line_speed, start_task))
-        robot.set_job([job_1, job_2])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
+        robot.add_job([job_1, job_2])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
     if choose_workbench_time != 0:
         log("choose_workbench()结束耗时：" + str(choose_workbench_time))
     log("movement()结束耗时：" + str(movement_time))
@@ -348,6 +400,17 @@ def process():
 
 def busy_to_idle_func(rid):
     schedule.add_job(Job(frame_id, rid, None, math.pi / 4, 3, start_task))
+
+
+def notify_product_update(bid, pid):
+    for robot in robots:
+        if robot.can_recv_job():
+            log(str(robot.rid) + "  " + str(robot.get_final_bench()[0])+ "  " + str(bid)+ "  " + str(pid))
+            job_1, job_2 = by_way_bussiness(robot.rid, robot.get_final_bench()[0], bid, pid)
+            if job_1 is None or job_2 is None:
+                continue
+            robot.insert_job([job_1, job_2])
+            log("robot add new job, current job is : " + str(robot.jobs))
 
 
 def init_env():
@@ -359,14 +422,14 @@ def init_env():
     for x, line in enumerate(graph):
         for y, ch in enumerate(line):
             if ch.isdigit():
-                w = Workbench(bench_id, int(ch), 0.5 * y + bw, 49.75 - 0.5 * x)
+                w = Workbench(bench_id, int(ch), 0.5 * y + bw, 49.75 - 0.5 * x, notify_product_update)
                 workbenches_category[int(ch)].append(bench_id)
                 workbenches.append(w)
                 bench_id += 1
             elif "A" == ch:
                 robots.append(Robot(robot_id, 0.5 * y + bw, 49.75 - 0.5 * x, busy_to_idle_func))
                 robot_id += 1
-    for bi, bench in enumerate(bench_type_need):
+    for bi, bench in enumerate(bench_raw_map):
         for pi in bench:
             buyer[pi].extend(workbenches_category[bi])
 
@@ -375,7 +438,7 @@ def init_env():
         for bid_2 in range(bid_1 + 1, len(workbenches)):
             bench_2 = workbenches[bid_2]
             bench_bw_dis[(bench_1.bid, bench_2.bid)] = distance_o(bench_1.get_pos(), bench_2.get_pos())
-    schedule.add_job(Job((duration * 60 - 5) * fps, 74, 74, 0, 0, clear_task))
+    schedule.add_job(Job((duration * 60 - 7) * fps, 74, 74, 0, 0, clear_task))
     finish()
 
 
@@ -435,13 +498,18 @@ def interact():
     log("update_venue()结束耗时：" + str(time.time() - start))
     start = time.time()
     log("第%d帧：" % frame_id)
-    s = "平台需要售卖\n"
-    for request in request_form[0]:
-        s += str(request) + "\n"
-    s += "平台需要购买\n"
-    for request in request_form[1]:
-        s += str(request) + "\n"
+    s = "平台需要售卖"
+    for pid in request_form[0]:
+        s += "\npid: " + str(pid) + " bid: "
+        for bid in request_form[0][pid]:
+            s += str(bid) + " "
+    s += "\n平台需要购买"
+    for pid in request_form[1]:
+        s += "\npid: " + str(pid) + " bid: "
+        for bid in request_form[1][pid]:
+            s += str(bid) + " "
     log(s)
+    log(request_form)
     # log("category_type_workbench :" + str(
     #     [[wb.bid for wb in workbenches_category[i]] for i in range(len(workbenches_category))]))
     log("interval结束耗时：" + str(time.time() - start))

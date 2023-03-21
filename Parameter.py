@@ -29,7 +29,8 @@ angular_accelerated_speed_hold = torque_max / robot_weight_hold  # 机器人带�
 product_buy_price = [0, 3000, 4400, 5800, 15400, 17200, 19200, 76000]  # 产品购买价格
 product_sell_price = [0, 6000, 7600, 9200, 22500, 25000, 27500, 105000]  # 产品售卖价格
 bench_work_time = [0, 50, 50, 50, 500, 500, 500, 1000, 1, 1]  # 工作台工作时间
-bench_type_need = [[], [], [], [], [1, 2], [1, 3], [2, 3], [4, 5, 6], [7], [1, 2, 3, 4, 5, 6, 7]]  # 工作台需要的原材料类型
+bench_raw_map = [[], [], [], [], [1, 2], [1, 3], [2, 3], [4, 5, 6], [7], [1, 2, 3, 4, 5, 6, 7]]  # 工作台需要的原材料类型
+raw_bench_map = [[4, 5], [4, 6], [5, 6], [7], [7], [7], [], []]  # 原材料供给工作台
 bench_bw_dis = {}  # 任意两个工作台之间的距离 {(bid1, bid2): 距离}
 workbenches_category = [[] for _ in range(10)]  # i类型工作台 = [b_1, b_2,...]
 buyer = [[] for _ in range(8)]  # 需要i号产品的工作台列表
@@ -41,6 +42,10 @@ buyer = [[] for _ in range(8)]  # 需要i号产品的工作台列表
 # ----------------------------------------
 # 工具函数
 # ----------------------------------------
+def get_product_profit(pid):
+    return product_sell_price[pid] - product_buy_price[pid]
+
+
 def get_bench_bw_dis(bid, oid):
     """
     获得两个工作台之间的距离
@@ -77,17 +82,7 @@ def get_clock_angle(pos_1, pos_2, dir):
     :return: 最小偏向角，单位弧度，负表示顺时针，正表示逆时针
     """
     v1, v2 = [np.cos(dir), np.sin(dir)], [pos_2[0] - pos_1[0], pos_2[1] - pos_1[1]]
-    # 2个向量模的乘积
-    TheNorm = np.linalg.norm(v1) * np.linalg.norm(v2)
-    # 叉乘
-    rho = np.rad2deg(np.arcsin(np.cross(v1, v2) / TheNorm))
-    # 点乘
-    # theta = np.rad2deg(np.arccos(np.dot(v1,v2)/TheNorm))
-    theta = np.arccos(np.dot(v1, v2) / TheNorm)
-    if rho < 0:
-        return - theta
-    else:
-        return theta
+    return get_vector_angle(v1, v2)
 
 
 def get_workbench_angle(pos_1, pos_2, pos_3):
@@ -99,6 +94,10 @@ def get_workbench_angle(pos_1, pos_2, pos_3):
     :return: 最小偏向角，单位弧度，负表示顺时针，正表示逆时针
     """
     v1, v2 = [pos_2[0] - pos_1[0], pos_2[1] - pos_1[1]], [pos_3[0] - pos_2[0], pos_3[1] - pos_2[1]]
+    return get_vector_angle(v1, v2)
+
+
+def get_vector_angle(v1, v2):
     # 2个向量模的乘积
     TheNorm = np.linalg.norm(v1) * np.linalg.norm(v2)
     # 叉乘
