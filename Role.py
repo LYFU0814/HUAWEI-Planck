@@ -132,7 +132,7 @@ class Robot:
         """
         :return: 线速度的初速度
         """
-        return self.speed_linear[0]
+        return self.speed_linear
 
     def get_w0(self):
         """

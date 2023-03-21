@@ -228,90 +228,21 @@ def by_way_bussiness(rid, final_buy_bid, new_bid, new_pid):  # 计算够不够�
 
 
 def movement(rid, bid):
+    """
+    计算运动速度
+    :param rid: 机器人编号
+    :param bid: 平台编号
+    :return: 线速度，角速度（负号为顺时针， 正号为逆时针）
+    """
     robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
-    v0, w0 = robots[rid].get_v0(), robots[rid].get_w0()
-    start_time, stop_time = 3, 100
-    line_dst = distance_o(robot_pos, bench_pos)
-    direction = robots[rid].direction
-    x_dis, y_dis = bench_pos[0] - robot_pos[0], bench_pos[1] - robot_pos[1]
-
-    if x_dis == 0 and y_dis == 0:
-        angular = 0
-    elif x_dis == 0 and y_dis > 0:
-        angular = math.pi / 2
-    elif x_dis == 0 and y_dis < 0:
-        angular = -math.pi / 2
-    elif x_dis > 0 and y_dis >= 0:
-        angular = math.atan(y_dis / x_dis)
-    elif x_dis < 0 and y_dis >= 0:
-        angular = math.pi + math.atan(y_dis / x_dis)
-    elif x_dis < 0 and y_dis <= 0:
-        angular = -math.pi + math.atan(y_dis / x_dis)
-    elif x_dis > 0 and y_dis <= 0:
-        angular = math.atan(y_dis / x_dis)
-    # else:
-    #     angular = math.atan(y_dis / x_dis)
-
-    log("angular %.3f" % angular)
-    log("direction %.3f" % direction)
-    flag = 1
-    if 0 <= angular <= math.pi and 0 <= direction <= math.pi:
-        if angular > direction:
-            flag = 1
-        else:
-            flag = -1
-    elif -math.pi <= angular <= 0 and -math.pi <= direction <= 0:
-        if angular > direction:
-            flag = 1
-        else:
-            flag = -1
-    elif 0 <= angular <= math.pi and -math.pi <= direction <= 0:
-        if angular - direction < math.pi:
-            flag = 1
-        else:
-            flag = -1
-    elif -math.pi <= angular <= 0 and 0 <= direction <= math.pi:
-        if direction - angular < math.pi:
-            flag = -1
-        else:
-            flag = 1
-
-    line_speed = 6
-    angular_speed = flag * math.pi
-    if line_dst < 1 or abs(angular - direction) > math.pi / 2:
-        if v0 > 1:
-            line_speed = -0.5
-        else:
-            line_speed = 1
-
-    return start_time, stop_time, line_speed, angular_speed
-
-
-def movement1(rid, bid):
-    robot_pos, bench_pos = robots[rid].get_pos(), workbenches[bid].get_pos()
-    v0, w0 = robots[rid].get_v0(), robots[rid].get_w0()
+    v0, w0 = robots[rid].get_v0()[0], robots[rid].get_w0()
     start_time, stop_time = 3, 100
     line_dis = distance_o(robot_pos, bench_pos)
     direction = robots[rid].direction
     x_dis, y_dis = bench_pos[0] - robot_pos[0], bench_pos[1] - robot_pos[1]
 
     # 获取和目的节点的方向角
-    if x_dis == 0 and y_dis == 0:
-        angular = 0
-    elif x_dis == 0 and y_dis > 0:
-        angular = math.pi / 2
-    elif x_dis == 0 and y_dis < 0:
-        angular = -math.pi / 2
-    elif x_dis > 0 and y_dis >= 0:
-        angular = math.atan(y_dis / x_dis)
-    elif x_dis < 0 and y_dis >= 0:
-        angular = math.pi + math.atan(y_dis / x_dis)
-    elif x_dis < 0 and y_dis <= 0:
-        angular = -math.pi + math.atan(y_dis / x_dis)
-    elif x_dis > 0 and y_dis <= 0:
-        angular = math.atan(y_dis / x_dis)
-    # else:
-    #     angular = math.atan(y_dis / x_dis)
+    angular = get_dst_angular(x_dis, y_dis)
 
     log("angular %.3f" % angular)
     log("direction %.3f" % direction)
@@ -322,27 +253,147 @@ def movement1(rid, bid):
         angular_speed = (-1 if yaw < 0 else 1) * 1 * math.pi
         line_speed = 4
     else:
-        angular_speed = (-1 if yaw < 0 else 1) * 0.2 * math.pi
+        angular_speed = yaw # (-1 if yaw < 0 else 1) * 0.2 * math.pi
         line_speed = 6
 
     if line_dis < 1:
         angular_speed = (-1 if yaw < 0 else 1) * 1 * math.pi
-        line_speed = 1
+        line_speed = 2
 
-    # 碰撞检测
+    # 撞墙检测，负优化，还需调参
+    # if clash_wall(robot_pos, angular):
+    #     line_speed = 2
+
+    # 碰撞检测1，半径+视野
+    # for robot_id in range(0, 4):
+    #     if robot_id == rid:
+    #         continue
+    #     else:
+    #         adj_robot_pos = robots[robot_id].get_pos()
+    #         adj_direction = robots[robot_id].direction
+    #         robots_angular = abs(direction - adj_direction)
+    #         robots_dis = distance_o(robot_pos, adj_robot_pos)
+    #         if robots_dis < 2 and robots_angular > 0.75 * math.pi and robots_angular < 1.25 * math.pi:
+    #             line_speed = 4
+    #             angular_speed = w0 - 0.1 * math.pi
+
+    # 碰撞检测2，速度方向及机器人位置和半径
+    # 不同碰撞情况需要处理（锐角、钝角）；
     for robot_id in range(0, 4):
         if robot_id == rid:
             continue
         else:
-            adj_robot_pos = robots[robot_id].get_pos()
-            adj_direction = robots[robot_id].direction
-            robots_angular = abs(direction - adj_direction)
-            robots_dis = distance_o(robot_pos, adj_robot_pos)
-            if robots_dis < 2 and robots_angular > 0.75 * math.pi and robots_angular < 1.25 * math.pi:
-                line_speed = 4
-                angular_speed = w0 - 0.1 * math.pi
+            if v0 > 4:
+                clash_radius = 6
+            else:
+                clash_radius = 4
+            if distance_o(robots[rid].get_pos(), robots[robot_id].get_pos()) < clash_radius:
+                clash_type = get_clash_type(rid, robot_id)
+                adj_direction = robots[robot_id].direction
+                robots_angular = abs(direction - adj_direction)
+                if 0 < robots_angular < 0.45 * math.pi: #不考虑锐角碰撞,目前0.45最好
+                    continue
+                if clash_type == 3: # 对撞
+                    log("对撞")
+                    log("机器人减速前速度：%.2f" % line_speed)
+                    log("机器人减速前角度：%.2f" % angular_speed)
+                    line_speed = 3
+                    angular_speed = w0 - 0.1 * math.pi
+                    log("==================碰撞处理====================")
+                    log("机器人减速后速度：%.2f" % line_speed)
+                    log("机器人减速后角度：%.2f" % angular_speed)
+                elif clash_type == 2: # 擦边碰撞
+                    log("擦边碰撞")
+                    log("机器人减速前速度：%.2f" % line_speed)
+                    log("机器人减速前角度：%.2f" % angular_speed)
+                    line_speed = 5
+                    angular_speed = w0 - 0.05 * math.pi
+                    log("机器人减速后速度：%.2f" % line_speed)
+                    log("机器人减速后角度：%.2f" % angular_speed)
 
     return start_time, stop_time, line_speed, angular_speed
+
+def get_dst_angular(x_dis, y_dis):
+    """
+        获取和目的节点的方向角
+        :param x_dis: x方向距离
+        :param y_dis: y方向距离
+        :return: 方向角
+        """
+    if x_dis == 0 and y_dis == 0:
+        angular = 0
+    elif x_dis == 0 and y_dis > 0:
+        angular = math.pi / 2
+    elif x_dis == 0 and y_dis < 0:
+        angular = -math.pi / 2
+    elif x_dis > 0 and y_dis >= 0:
+        angular = math.atan(y_dis / x_dis)
+    elif x_dis < 0 and y_dis >= 0:
+        angular = math.pi + math.atan(y_dis / x_dis)
+    elif x_dis < 0 and y_dis <= 0:
+        angular = -math.pi + math.atan(y_dis / x_dis)
+    elif x_dis > 0 and y_dis <= 0:
+        angular = math.atan(y_dis / x_dis)
+    return angular
+
+def get_clock_angle(pos_1, pos_2, dir):
+    """
+    计算最小偏向角
+    :param pos_1: 机器人位置
+    :param pos_2: 平台位置
+    :param dir: 机器人当前方向
+    :return: 最小偏向角，单位弧度，负表示顺时针，正表示逆时针
+    """
+    v1, v2 = [np.cos(dir), np.sin(dir)], [pos_2[0] - pos_1[0], pos_2[1] - pos_1[1]]
+    # 2个向量模的乘积
+    TheNorm = np.linalg.norm(v1) * np.linalg.norm(v2)
+    # 叉乘
+    rho = np.rad2deg(np.arcsin(np.cross(v1, v2) / TheNorm))
+    # 点乘
+    # theta = np.rad2deg(np.arccos(np.dot(v1,v2)/TheNorm))
+    theta = np.arccos(np.dot(v1, v2) / TheNorm)
+    if rho < 0:
+        return - theta
+    else:
+        return theta
+
+def clash_wall(robot_pos, angular):
+    if robot_pos[0] < 2 and abs(angular) < (1 / 4) * math.pi:
+        return True
+    if robot_pos[0] > 48 and abs(angular) > (3 / 4) * math.pi:
+        return True
+    if robot_pos[1] < 2 and (abs(angular) < (1 / 4) * math.pi or abs(angular) > (3 / 4) * math.pi):
+        return True
+    if robot_pos[1] > 48 and (1 / 4) * math.pi < abs(angular) < (3 / 4) * math.pi:
+        return True
+    return False
+
+def get_clash_type(robotA, robotB):
+    direction_A,  direction_B = robots[robotA].direction, robots[robotB].direction
+    v0_A, v0_B = robots[robotA].get_v0(), robots[robotB].get_v0()
+    v_A, v_B = [v0_A[0], v0_A[1]], [v0_B[0], v0_B[1]]
+    c_A, c_B = robots[robotA].get_pos(), robots[robotB].get_pos()
+    r_A, r_B = 0.45 if robots[robotA].take_type == 0 else 0.53, 0.45 if robots[robotB].take_type == 0 else 0.53
+    v = [v_A[0] - v_B[0], v_A[1] - v_B[1]]
+    c = [c_A[0] - c_B[0], c_A[1] - c_B[1]]
+    r = r_A + r_B
+    # 方程为 (v dot v) * t **2 + 2(v dot c) * t + (c dot c) - r**2 = 0
+    delta =(2 * np.dot(v, c)) ** 2 - 4 * (np.dot(v, v)) * (np.dot(c, c) - r ** 2)
+    if delta > 0:
+        log("====================碰撞======================")
+        log("距离：%.2f" % distance_o(c_A, c_B))
+        log("robotA位置：(%.2f,%.2f)" % (c_A[0], c_A[1]))
+        log("robotB位置：(%.2f,%.2f)" % (c_B[0], c_B[1]))
+        log("robotA朝向：%.2f" % direction_A)
+        log("robotB朝向：%.2f" % direction_B)
+        return 3  # 对撞
+    elif delta == 0:
+        return 2  # 擦边撞
+    else:
+        return 1  # 不碰撞
+
+
+
 
 
 def start_task(job):
@@ -376,7 +427,7 @@ def process():
             '''修正过程'''
             bid = robot.get_job()[0]
             start = time.time()
-            start_time, stop_time, line_speed, angular_speed = movement1(robot.rid, bid)
+            start_time, stop_time, line_speed, angular_speed = movement(robot.rid, bid)
             movement_time += time.time() - start
             schedule.add_job(Job(frame_id, robot.rid, robot.get_job(), angular_speed, line_speed, start_task))
             continue
@@ -389,7 +440,7 @@ def process():
             continue
         # 进行线速度和角速度计算, 并添加任务，计算第一个阶段
         start = time.time()
-        start_time, stop_time, line_speed, angular_speed = movement1(robot.rid, job_1[0])
+        start_time, stop_time, line_speed, angular_speed = movement(robot.rid, job_1[0])
         movement_time += time.time() - start
         schedule.add_job(Job(frame_id, robot.rid, job_1, angular_speed, line_speed, start_task))
         robot.add_job([job_1, job_2])  # 表示工作忙, 0 在bench_id1买x号产品，1 在bench_id2卖
