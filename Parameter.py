@@ -53,6 +53,8 @@ def get_bench_bw_dis(bid, oid):
     :param oid: 工作台id 2
     :return: 平台之间的距离
     """
+    if bid == oid:
+        return 0
     return bench_bw_dis[bid, oid] if bid < oid else bench_bw_dis[oid, bid]
 
 

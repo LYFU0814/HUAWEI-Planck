@@ -195,28 +195,36 @@ def init_choice(rid):
     return fin__buy_bid, fin__buy_pid, fin__sell_bid, fin__sell_pid
 
 
-def by_way_bussiness(rid, final_buy_bid, new_bid, new_pid):  # 计算够不够顺风，够的话返回顺风job，不够的话返回none
+def by_way_bussiness(rid, new_bid, new_pid):  # 计算够不够顺风，够的话返回顺风job，不够的话返回none
     """
     :param rid: 机器人id
-    :param final_buy_bid: 要前往的目的地
     :param new_bid: 产生新订单平台
     :param new_pid: 产生新产品
     :return: 工作
     """
     robot_position = robots[rid].get_pos()
-    log(get_relevant_order_sell(new_pid))
-    best_buy_relevant_bench = sorted(get_relevant_order_sell(new_pid), key=lambda oid: get_bench_bw_dis(new_bid, oid))
-    best_sell_bid, best_sell_pid = cacula_sell_score(new_pid, best_buy_relevant_bench)
-    distance_new = int(distance_o(robot_position, workbenches[new_bid].get_pos()))
+    final_buy_bid, final_sell_bid = robots[rid].get_final_bench_0(), robots[rid].get_final_bench_1()
 
-    distance_ori = int(distance_o(robot_position, workbenches[final_buy_bid].get_pos()))
-    log(str(best_sell_bid) + "  " + str(final_buy_bid))
+    best_buy_relevant_bench = sorted(get_relevant_order_sell(new_pid), key=lambda oid: get_bench_bw_dis(new_bid, oid))
+    # best_sell_bid, best_sell_pid = cacula_sell_score(new_pid, best_buy_relevant_bench)
+    best_sell_bid = None
+    if len(best_buy_relevant_bench) > 0:
+        best_sell_bid = best_buy_relevant_bench[0]
+    distance_3 = int(distance_o(robot_position, workbenches[new_bid].get_pos()))  # 3
+    distance_1 = int(distance_o(robot_position, workbenches[final_buy_bid].get_pos()))  # 1
+
     # TODO:
     if best_sell_bid is None:
         return None, None
 
-    distance_sell = int(distance_o(workbenches[best_sell_bid].get_pos(), workbenches[final_buy_bid].get_pos()))
-    if ((distance_sell + distance_new) < 1.5 * distance_ori):
+    distance_2 = get_bench_bw_dis(final_buy_bid, final_sell_bid)
+    distance_4 = get_bench_bw_dis(new_bid, best_sell_bid)
+    distance_5 = get_bench_bw_dis(best_sell_bid, final_buy_bid)
+
+    profit_ori = get_product_profit(robots[rid].get_job()[2]) / (distance_1 + distance_2)
+    profit_new = (get_product_profit(robots[rid].get_job()[2]) + get_product_profit(new_pid)) / (distance_3 + distance_4 + distance_5 + distance_2)
+
+    if profit_ori < 0.95 * profit_new:
         temporary_buy_bid, temporary_buy_pid = new_bid, new_pid
         temporary_sell_bid, temporary_sell_pid = best_sell_bid, new_pid
     else:
@@ -224,7 +232,8 @@ def by_way_bussiness(rid, final_buy_bid, new_bid, new_pid):  # 计算够不够�
     bench_1, bench_2 = (temporary_buy_bid, 0, temporary_buy_pid), (temporary_sell_bid, 1, temporary_buy_pid)
     log("choose job result : " + str(bench_1) + "  " + str(bench_2))
     # return None, None
-    return bench_1, bench_2
+    # return bench_1, bench_2
+    return None, None
 
 
 def movement(rid, bid):
@@ -253,7 +262,7 @@ def movement(rid, bid):
         angular_speed = (-1 if yaw < 0 else 1) * 1 * math.pi
         line_speed = 4
     else:
-        angular_speed = yaw # (-1 if yaw < 0 else 1) * 0.2 * math.pi
+        angular_speed = yaw  # (-1 if yaw < 0 else 1) * 0.2 * math.pi
         line_speed = 6
 
     if line_dis < 1:
@@ -291,9 +300,9 @@ def movement(rid, bid):
                 clash_type = get_clash_type(rid, robot_id)
                 adj_direction = robots[robot_id].direction
                 robots_angular = abs(direction - adj_direction)
-                if 0 < robots_angular < 0.45 * math.pi: #不考虑锐角碰撞,目前0.45最好
+                if 0 < robots_angular < 0.45 * math.pi:  # 不考虑锐角碰撞,目前0.45最好
                     continue
-                if clash_type == 3: # 对撞
+                if clash_type == 3:  # 对撞
                     log("对撞")
                     log("机器人减速前速度：%.2f" % line_speed)
                     log("机器人减速前角度：%.2f" % angular_speed)
@@ -302,7 +311,7 @@ def movement(rid, bid):
                     log("==================碰撞处理====================")
                     log("机器人减速后速度：%.2f" % line_speed)
                     log("机器人减速后角度：%.2f" % angular_speed)
-                elif clash_type == 2: # 擦边碰撞
+                elif clash_type == 2:  # 擦边碰撞
                     log("擦边碰撞")
                     log("机器人减速前速度：%.2f" % line_speed)
                     log("机器人减速前角度：%.2f" % angular_speed)
@@ -312,6 +321,7 @@ def movement(rid, bid):
                     log("机器人减速后角度：%.2f" % angular_speed)
 
     return start_time, stop_time, line_speed, angular_speed
+
 
 def get_dst_angular(x_dis, y_dis):
     """
@@ -336,6 +346,7 @@ def get_dst_angular(x_dis, y_dis):
         angular = math.atan(y_dis / x_dis)
     return angular
 
+
 def get_clock_angle(pos_1, pos_2, dir):
     """
     计算最小偏向角
@@ -357,6 +368,7 @@ def get_clock_angle(pos_1, pos_2, dir):
     else:
         return theta
 
+
 def clash_wall(robot_pos, angular):
     if robot_pos[0] < 2 and abs(angular) < (1 / 4) * math.pi:
         return True
@@ -368,17 +380,19 @@ def clash_wall(robot_pos, angular):
         return True
     return False
 
+
 def get_clash_type(robotA, robotB):
-    direction_A,  direction_B = robots[robotA].direction, robots[robotB].direction
+    direction_A, direction_B = robots[robotA].direction, robots[robotB].direction
     v0_A, v0_B = robots[robotA].get_v0(), robots[robotB].get_v0()
     v_A, v_B = [v0_A[0], v0_A[1]], [v0_B[0], v0_B[1]]
     c_A, c_B = robots[robotA].get_pos(), robots[robotB].get_pos()
-    r_A, r_B = 0.45 if robots[robotA].take_type == 0 else 0.53, 0.45 if robots[robotB].take_type == 0 else 0.53
+    r_A, r_B = robots[robotA].get_radius(), robots[robotB].get_radius()
     v = [v_A[0] - v_B[0], v_A[1] - v_B[1]]
     c = [c_A[0] - c_B[0], c_A[1] - c_B[1]]
     r = r_A + r_B
     # 方程为 (v dot v) * t **2 + 2(v dot c) * t + (c dot c) - r**2 = 0
-    delta =(2 * np.dot(v, c)) ** 2 - 4 * (np.dot(v, v)) * (np.dot(c, c) - r ** 2)
+    a, b = np.dot(v, v), 2 * np.dot(v, c)
+    delta = b ** 2 - 4 * a * (np.dot(c, c) - r ** 2)
     if delta > 0:
         log("====================碰撞======================")
         log("距离：%.2f" % distance_o(c_A, c_B))
@@ -386,14 +400,16 @@ def get_clash_type(robotA, robotB):
         log("robotB位置：(%.2f,%.2f)" % (c_B[0], c_B[1]))
         log("robotA朝向：%.2f" % direction_A)
         log("robotB朝向：%.2f" % direction_B)
+        t1, t2 = (-b + math.sqrt(delta)) / (2 * a), (-b - math.sqrt(delta)) / (2 * a)
+        if t1 < 0 and t2 < 0:
+            return 1
+        elif t1 < 0 or t2 < 0:
+            return 2
         return 3  # 对撞
     elif delta == 0:
         return 2  # 擦边撞
     else:
         return 1  # 不碰撞
-
-
-
 
 
 def start_task(job):
@@ -456,12 +472,12 @@ def busy_to_idle_func(rid):
 def notify_product_update(bid, pid):
     for robot in robots:
         if robot.can_recv_job():
-            log(str(robot.rid) + "  " + str(robot.get_final_bench()[0])+ "  " + str(bid)+ "  " + str(pid))
-            job_1, job_2 = by_way_bussiness(robot.rid, robot.get_final_bench()[0], bid, pid)
+            # log(str(robot.rid) + "  " + str(robot.get_final_bench_1()[0]) + "  " + str(bid) + "  " + str(pid))
+            job_1, job_2 = by_way_bussiness(robot.rid, bid, pid)
             if job_1 is None or job_2 is None:
                 continue
             robot.insert_job([job_1, job_2])
-            log("robot add new job, current job is : " + str(robot.jobs))
+            log("robot " + str(robot.rid) + " add new job, current job is : " + str(robot.jobs))
 
 
 def init_env():
@@ -500,6 +516,7 @@ def input_data():
         if "OK" == line:
             break
         elif "" == line:
+            log("Total transaction times : " + str(transactions_times))
             sys.exit(0)
         venue.append(line)
     return venue

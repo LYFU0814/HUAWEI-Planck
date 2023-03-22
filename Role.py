@@ -13,6 +13,7 @@ request_form = {0: {i: {} for i in range(1, 8)},  # 1:[bid_1:bid_11, bid_11}, bi
 
 request_form_record = {}  # key 为 (bid, product_id), value 为(0->购买,1->售卖,2->已接,3->预定)
 stop_rcv_order = False
+transactions_times = 0
 
 
 class Robot:
@@ -41,8 +42,11 @@ class Robot:
     def can_recv_job(self):
         return len(self.jobs) == 2 and self.take_type == 0
 
-    def get_final_bench(self):
-        return self.jobs[-1]
+    def get_final_bench_1(self):
+        return self.jobs[-1][0]
+
+    def get_final_bench_0(self):
+        return self.jobs[-2][0]
 
     def set_busy_to_idle_func(self, func):
         self.busy_to_idle_func = func
@@ -145,6 +149,12 @@ class Robot:
         :return: 获得当前机器人重量
         """
         return robot_weight_normal if self.take_type == 0 else robot_weight_hold
+
+    def get_radius(self):
+        """
+        :return: 获得当前机器人重量
+        """
+        return robot_radius_normal if self.take_type == 0 else robot_radius_hold
 
 
 class Workbench:
@@ -308,8 +318,6 @@ def update_request(seller, buyer, pid):
 
 
 def get_buyer(key):
-    log(key)
-    log(request_form_record)
     req_type = request_form_record[key]
     bid = key[0]
     pid = key[1]
@@ -362,6 +370,7 @@ def del_request(key):
     删除订单
     :param key: 订单描述, (bid, pid)
     """
+    global transactions_times
     if key not in request_form_record:
         return
     bid = key[0]
@@ -370,6 +379,7 @@ def del_request(key):
         req_type = request_form_record[key]
         del request_form[req_type][pid][bid]
     del request_form_record[key]
+    transactions_times += 1
 
 
 def del_all_request():
