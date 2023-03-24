@@ -634,6 +634,7 @@ def init_env():
 
 def input_data():
     venue = []
+    global transactions_times
     while True:
         line = sys.stdin.readline().strip('\n')
         if "OK" == line:
