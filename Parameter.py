@@ -42,6 +42,10 @@ buyer = [[] for _ in range(8)]  # 需要i号产品的工作台列表
 # ----------------------------------------
 # 工具函数
 # ----------------------------------------
+def in_range(n, start, end=0):
+    return start <= n <= end if end >= start else end <= n <= start
+
+
 def get_product_profit(pid):
     return product_sell_price[pid] - product_buy_price[pid]
 
@@ -111,3 +115,7 @@ def get_vector_angle(v1, v2):
         return - theta
     else:
         return theta
+
+if __name__ == '__main__':
+    print(get_vector_angle((1,0), (0, -1)) * 57.3)
+
