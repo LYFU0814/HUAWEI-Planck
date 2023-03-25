@@ -1,26 +1,24 @@
+import heapq
 from Parameter import *
-from Schedule import log
-from collections import OrderedDict
-from vector import Vector2, Line
-import rvo_math as rvo_math
 
+# ----------------------------------------
+# 全局变量
+# ----------------------------------------
 robots = []
 workbenches = []
-times = 0
 # ----------------------------------------
 # 每个平台的订单表
 # ----------------------------------------
 request_form = {0: {i: {} for i in range(1, 8)},  # 1:[bid_1:bid_11, bid_11}, bid_2]
                 1: {i: {} for i in range(1, 8)}}  # 0 位置表示购买需求， 1 位置表示售卖需求
-
 request_form_record = {}  # key 为 (bid, product_id), value 为(0->购买,1->售卖,2->已接,3->预定)
 stop_rcv_order = False
-
+transactions_times = 0
 
 
 class Robot:
     __slots__ = ['rid', 'take_type', 'factor_time_value', 'factor_collision_value', "bench_id", 'jobs',
-                 'speed_angular', 'speed_linear', 'direction', 'pos', 'action_list', 'busy_to_idle_func', 'agent']
+                 'speed_angular', 'speed_linear', 'direction', 'pos', 'action_list', 'busy_to_idle_func']
 
     def __init__(self, robot_id, x, y, func):
         self.rid = robot_id
@@ -36,7 +34,8 @@ class Robot:
         self.jobs = []
         self.busy_to_idle_func = func
 
-        self.agent = self.Agent(x, y)
+
+        # self.agent = self.Agent(x, y)
 
     def add_job(self, jobs):
         rcv_request((jobs[0][0], jobs[0][2]))
@@ -44,7 +43,7 @@ class Robot:
         self.jobs.extend(jobs)
 
     def can_recv_job(self):
-        return 1 <= len(self.jobs) <= 2 and self.take_type == 0   #1 <= len(self.jobs) <= 2
+        return len(self.jobs) == 2 and self.take_type == 0
 
     def get_final_bench_1(self):
         return self.jobs[-1][0]
@@ -61,15 +60,15 @@ class Robot:
         :return: (x, y, z) x: 工作台id，y: 0买入1卖出，z: 产品id
         """
         if len(self.jobs) > 0:
-            log("robot_id_job: " + str(self.rid) + "  job : " + str(self.jobs[0]))
+            log("robot_id_job: " + str(self.rid) + "  job : " + str(self.jobs))
             return self.jobs[0]
 
     def replace_job(self, jobs):
         if len(self.jobs) == 2:
-            add_request(Request(jobs[0][0], jobs[0][2], jobs[0][1]))
-            add_request(Request(jobs[1][0], jobs[1][2], jobs[1][1]))
-            self.add_job(jobs)
-
+            # 归还订单需求
+            add_request(jobs[0][0], jobs[0][2], jobs[0][1])
+            add_request(jobs[1][0], jobs[1][2], jobs[1][1])
+            self.insert_job(jobs, 0)
 
     def insert_job(self, jobs, pos=0):
         if pos == 0:
@@ -124,7 +123,7 @@ class Robot:
         self.direction = data[7]
         self.set_pos(data[8], data[9])
         self.is_in_bench()
-        self.agent.update(self.speed_linear, self.pos, self.get_radius())
+        # self.agent.update(self.speed_linear, self.pos, self.get_radius())
 
     def is_busy(self):
         return len(self.jobs) > 0
@@ -174,292 +173,6 @@ class Robot:
         """
         return robot_radius_normal if self.take_type == 0 else robot_radius_hold
 
-    class Agent:
-        def __init__(self, x, y):
-            self.orca_lines_ = []
-            self.time_horizon_obst_ = 300
-            self.time_horizon_ = 30
-
-            self.time_step_ = 0.02  # 20ms 间隔
-            self.agent_neighbors_ = []  # dis, agent
-
-            self.position_ = Vector2(x, y)
-            self.velocity_ = Vector2()
-            self.radius_ = 0.0
-            self.goal_ = Vector2()
-
-            self.max_speed_ = 6
-            self.pref_velocity_ = Vector2()
-            self.new_velocity_ = Vector2()
-
-        def update(self, v, p, r):
-            """
-            Updates the two-dimensional position and two-dimensional velocity of this agent.
-            """
-            self.velocity_ = Vector2(v[0], v[1])
-            self.position_ = Vector2(p[0], p[1])
-            self.radius_ = r + 0.1
-
-        def set_preferred_velocities(self, goal):
-            """
-            Set the preferred velocity to be a vector of unit magnitude (speed) in the direction of the goal.
-            """
-            self.goal_ = Vector2(goal[0], goal[1])
-            goal_vector = self.goal_ - self.position_
-
-            if rvo_math.abs_sq(goal_vector) > 0.2:
-                goal_vector = rvo_math.normalize(goal_vector)  # 变成速度的单位向量
-
-            self.pref_velocity_ = goal_vector
-
-        def compute_new_velocity(self):
-            """
-            Computes the new velocity of this agent.
-            """
-            self.orca_lines_ = []
-            # timeHorizonobst_是安全的时间单位，它乘以速度的值就可以理解为agent的避障探针，此数值越大
-            # agent就会越早做出避障反应 // 此处就是取它的倒数（invertor)以方便后续的计算
-            invTimeHorizonObst = 1.0 / self.time_horizon_obst_
-
-            # 记录一下静态障碍增加了多少条障碍线
-            numObstLines = len(self.orca_lines_)
-            invTimeHorizon = 1.0 / self.time_horizon_
-
-            # Create agent ORCA lines.
-            for i in range(len(self.agent_neighbors_)):
-                other = self.agent_neighbors_[i][1]
-                # 相对距离，me-》you
-                relativePosition = other.position_ - self.position_
-                # 相对速度，you-》me
-                relativeVelocity = self.velocity_ - other.velocity_
-                # 距离的平方
-                distSq = rvo_math.abs_sq(relativePosition)
-                # 半径和
-                combinedRadius = self.radius_ + other.radius_
-                # 半径和的平方
-                combinedRadiusSq = rvo_math.square(combinedRadius)
-
-                line = Line()
-                u = Vector2()
-                # 尚未接触
-                if distSq > combinedRadiusSq:
-                    # No collision.
-                    w = relativeVelocity - invTimeHorizon * relativePosition
-
-                    # Vector from cutoff center to relative velocity.
-                    wLengthSq = rvo_math.abs_sq(w)
-                    dotProduct1 = w @ relativePosition  # 叉乘
-
-                    if dotProduct1 < 0.0 and rvo_math.square(dotProduct1) > combinedRadiusSq * wLengthSq:
-                        # Project on cut-off circle.
-                        wLength = math.sqrt(wLengthSq)
-                        unitW = w / wLength
-                        # 方向为w顺时针转90°，相当于是当前速度相对于小圆的切线
-                        line.direction = Vector2(unitW.y, -unitW.x)
-                        # 此处combinedRadius * invTimeHorizon为小圆半径 // 减去wlLength就是把w放在小圆圆心时，w终点到小圆表面的距离
-                        u = (combinedRadius * invTimeHorizon - wLength) * unitW
-                    else:
-                        # Project on legs.
-                        leg = math.sqrt(distSq - combinedRadiusSq)
-
-                        if rvo_math.det(relativePosition, w) > 0.0:
-                            # Project on left leg.
-                            line.direction = Vector2(relativePosition.x * leg - relativePosition.y * combinedRadius,
-                                                     relativePosition.x * combinedRadius + relativePosition.y * leg) / distSq
-                        else:
-                            # Project on right leg.
-                            line.direction = -Vector2(relativePosition.x * leg + relativePosition.y * combinedRadius,
-                                                      -relativePosition.x * combinedRadius + relativePosition.y * leg) / distSq
-
-                        dotProduct2 = relativeVelocity @ line.direction
-                        u = dotProduct2 * line.direction - relativeVelocity
-                # 即将接触
-                else:
-                    # Collision. Project on cut-off circle of time timeStep.
-                    invTimeStep = 1.0 / self.time_step_
-
-                    # Vector from cutoff center to relative velocity.跟前面的w一个意思，指小圆中心到当前速度的向量
-                    w = relativeVelocity - invTimeStep * relativePosition
-
-                    wLength = abs(w)
-                    unitW = w / wLength
-
-                    line.direction = Vector2(unitW.y, -unitW.x)
-                    # 此处的u还是指到小圆圆周，类似上面的第一种情况, 此处u是当前速度到障碍体表面最近点的向量
-                    u = (combinedRadius * invTimeStep - wLength) * unitW
-
-                line.point = self.velocity_ + 0.5 * u
-                self.orca_lines_.append(line)
-
-            lineFail, self.new_velocity_ = self.linear_program2(self.orca_lines_, self.max_speed_, self.pref_velocity_,
-                                                                False, self.new_velocity_)
-
-            if lineFail < len(self.orca_lines_):
-                self.new_velocity_ = self.linear_program3(self.orca_lines_, numObstLines, lineFail, self.max_speed_,
-                                                          self.new_velocity_)
-            return self.new_velocity_.x, self.new_velocity_.y
-
-        def linear_program1(self, lines, lineNo, radius, optVelocity, directionOpt):
-            """
-            Solves a one-dimensional linear program on a specified line subject to linear constraints defined by lines and a circular constraint.
-
-            Args:
-                lines (list): Lines defining the linear constraints.
-                lineNo (int): The specified line constraint.
-                radius (float): The radius of the circular constraint.
-                optVelocity (Vector2): The optimization velocity.
-                directionOpt (bool): True if the direction should be optimized.
-
-            Returns:
-                bool: True if successful.
-                Vector2: A reference to the result of the linear program.
-            """
-            dotProduct = lines[lineNo].point @ lines[lineNo].direction
-            discriminant = rvo_math.square(dotProduct) + rvo_math.square(radius) - rvo_math.abs_sq(lines[lineNo].point)
-
-            if discriminant < 0.0:
-                # Max speed circle fully invalidates line lineNo.
-                return False, None
-
-            sqrtDiscriminant = math.sqrt(discriminant)
-            tLeft = -dotProduct - sqrtDiscriminant
-            tRight = -dotProduct + sqrtDiscriminant
-
-            for i in range(lineNo):
-                denominator = rvo_math.det(lines[lineNo].direction, lines[i].direction)
-                numerator = rvo_math.det(lines[i].direction, lines[lineNo].point - lines[i].point)
-
-                if abs(denominator) <= rvo_math.EPSILON:
-                    # Lines lineNo and i are (almost) parallel.
-                    if numerator < 0.0:
-                        return False, None
-                    continue
-
-                t = numerator / denominator
-
-                if denominator >= 0.0:
-                    # Line i bounds line lineNo on the right.
-                    tRight = min(tRight, t)
-                else:
-                    # Line i bounds line lineNo on the left.
-                    tLeft = max(tLeft, t)
-
-                if tLeft > tRight:
-                    return False, None
-
-            if directionOpt:
-                # Optimize direction.
-                if optVelocity @ lines[lineNo].direction > 0.0:
-                    # Take right extreme.
-                    result = lines[lineNo].point + tRight * lines[lineNo].direction
-                else:
-                    # Take left extreme.
-                    result = lines[lineNo].point + tLeft * lines[lineNo].direction
-            else:
-                # Optimize closest point.
-                t = lines[lineNo].direction @ (optVelocity - lines[lineNo].point)
-
-                if t < tLeft:
-                    result = lines[lineNo].point + tLeft * lines[lineNo].direction
-                elif t > tRight:
-                    result = lines[lineNo].point + tRight * lines[lineNo].direction
-                else:
-                    result = lines[lineNo].point + t * lines[lineNo].direction
-
-            return True, result
-
-        def linear_program2(self, lines, radius, optVelocity, directionOpt, result):
-            """
-            Solves a two-dimensional linear program subject to linear constraints defined by lines and a circular constraint.
-
-            Args:
-                lines (list): Lines defining the linear constraints.
-                radius (float): The radius of the circular constraint.
-                optVelocity (Vector2): The optimization velocity.
-                directionOpt (bool): True if the direction should be optimized.
-                result (Vector2): A reference to the result of the linear program.
-
-            Returns:
-                int: The number of the line it fails on, and the number of lines if successful.
-                Vector2: A reference to the result of the linear program.
-            """
-            if directionOpt:
-                # Optimize direction. Note that the optimization velocity is of unit length in this case.
-                result = optVelocity * radius
-            elif rvo_math.abs_sq(optVelocity) > rvo_math.square(radius):
-                # Optimize closest point and outside circle.
-                result = rvo_math.normalize(optVelocity) * radius
-            else:
-                # Optimize closest point and inside circle.
-                result = optVelocity
-
-            for i in range(len(lines)):
-                if rvo_math.det(lines[i].direction, lines[i].point - result) > 0.0:
-                    # Result does not satisfy constraint i. Compute new optimal result.
-                    tempResult = result
-                    success, result = self.linear_program1(lines, i, radius, optVelocity, directionOpt)
-                    if not success:
-                        result = tempResult
-                        return i, result
-
-            return len(lines), result
-
-        def linear_program3(self, lines, numObstLines, beginLine, radius, result):
-            """
-            Solves a two-dimensional linear program subject to linear constraints defined by lines and a circular constraint.
-
-            Args:
-                lines (list): Lines defining the linear constraints.
-                numObstLines (int): Count of obstacle lines.
-                beginLine (int): The line on which the 2-d linear program failed.
-                radius (float): The radius of the circular constraint.
-                result (Vector2): A reference to the result of the linear program.
-
-            Returns:
-                Vector2: A reference to the result of the linear program.
-            """
-            distance = 0.0
-
-            for i in range(beginLine, len(lines)):
-                if rvo_math.det(lines[i].direction, lines[i].point - result) > distance:
-                    # Result does not satisfy constraint of line i.
-                    projLines = []
-
-                    for ii in range(numObstLines):
-                        projLines.append(lines[ii])
-
-                    for j in range(numObstLines, i):
-                        line = Line()
-                        determinant = rvo_math.det(lines[i].direction, lines[j].direction)
-
-                        if abs(determinant) <= rvo_math.EPSILON:
-                            # Line i and line j are parallel.
-                            if lines[i].direction @ lines[j].direction > 0.0:
-                                # Line i and line j point in the same direction.
-                                continue
-                            else:
-                                # Line i and line j point in opposite direction.
-                                line.point = 0.5 * (lines[i].point + lines[j].point)
-                        else:
-                            line.point = lines[i].point + (rvo_math.det(lines[j].direction, lines[i].point - lines[
-                                j].point) / determinant) * lines[i].direction
-
-                        line.direction = rvo_math.normalize(lines[j].direction - lines[i].direction)
-                        projLines.append(line)
-
-                    tempResult = result
-                    lineFail, result = self.linear_program2(projLines, radius,
-                                                            Vector2(-lines[i].direction.y, lines[i].direction.x), True,
-                                                            result)
-                    if lineFail < len(projLines):
-                        """
-                        This should in principle not happen. The result is by definition already in the feasible region of this linear program. If it fails, it is due to small floating point error, and the current result is kept.
-                        """
-                        result = tempResult
-
-                    distance = rvo_math.det(lines[i].direction, lines[i].point - result)
-            return result
-
 
 class Workbench:
     __slots__ = ['bid', 'pos', '_type', 'remaining_time', 'status_ingredient_value',
@@ -502,7 +215,7 @@ class Workbench:
                 self.ingredient_status[pid] = 1
             else:
                 self.ingredient_status[pid] = 0
-                add_request(Request(self.bid, pid, 1))  # 需要购买
+                add_request(self.bid, pid, 1)  # 需要购买
 
     # def query_short_supply(self):
     #     return self.status_ingredient.difference(bench_type_need[self._type])
@@ -512,8 +225,17 @@ class Workbench:
         if self._type in self.product_status:  # 确实成产该产品
             self.product_status[self._type] = param
             if self.product_status[self._type] == 1 and not stop_rcv_order:
-                add_request(Request(self.bid, self._type, 0))  # 可以买
+                add_request(self.bid, self._type, 0)  # 可以买
                 self.notifyRobot(self.bid, self._type)
+
+    def get_requirement(self):
+        raws = []
+        need = []
+        for pid in self.ingredient_status.keys():
+            raws.append(pid)
+            if self.ingredient_status[pid] == 1:
+                need.append(pid)
+        return [raws, need]
 
     def has_product(self, pid):
         """
@@ -553,24 +275,20 @@ class Workbench:
         return self._type
 
 
-product_demand_table = [0 for _ in range(8)]
-def add_request(request):
+def add_request(bid, pid, req_type):
     """
     发布订单
-    :param request: 订单描述
+    :param bid: 发布平台
+    :param pid: 发布产品
+    :param req_type: 需求类型
     """
     if stop_rcv_order:
         return
-
-    bid = request.key[0]
-    pid = request.key[1]
     key = (bid, pid)
     if key not in request_form_record:
-        req_idx = request.req_type
         # 需求表操作
-        request_form[req_idx][pid][bid] = -1
-        request_form_record[(bid, pid)] = req_idx
-        product_demand_table[pid] += req_idx
+        request_form[req_type][pid][bid] = -1
+        request_form_record[(bid, pid)] = req_type
     elif key in request_form_record and request_form_record[key] == 3:  # 预定订单变为已接订单
         request_form_record[key] = 2
     else:
@@ -585,12 +303,14 @@ def get_relevant_order_buy(pid):
     """
     return list(request_form[0][pid].keys())
 
+
 def get_relevant_order_sell(pid):
     """
     :param pid: 产品
     :return: 返回可以售卖的平台
     """
     return list(request_form[1][pid].keys())
+
 
 def get_request_form(req_type):
     orders = []
@@ -657,15 +377,15 @@ def rcv_request(key):
         return
     bid = key[0]
     pid = key[1]
+    log("rcv_request : " + str(bid) + "   " + str(pid))
     if has_request(key) != -1:
         req_type = request_form_record[key]
-        product_demand_table[pid] -= req_type
-        if req_type == 1:  # 产品需求减少
-            product_demand_table[pid] -= 1
+        if bid in workbenches_category[9]:
+            return
         del request_form[req_type][pid][bid]
-        # 此时暂时实际并没有放入2号数组
-        request_form_record[key] = 2  # 已接订单列表，request_form没有2，3类型的字段，所以request，此处只为标识
+        request_form_record[key] = 2  # 已接订单列表，此时暂时实际并没有放入2号数组, request_form没有2，3类型的字段，所以request，此处只为标识
     elif workbenches[bid].relevant_product(pid):
+        log("预定:  " + str(key))
         request_form_record[key] = 3  # 预定
 
 
@@ -674,28 +394,29 @@ def del_request(key):
     删除订单
     :param key: 订单描述, (bid, pid)
     """
-    global times
+    global transactions_times
     if key not in request_form_record:
         return
     bid = key[0]
     pid = key[1]
+    if bid in workbenches_category[9]:
+        return
     if request_form_record[key] == 0 or request_form_record[key] == 1:
         req_type = request_form_record[key]
         del request_form[req_type][pid][bid]
     del request_form_record[key]
-    times += 1
+    transactions_times += 1
 
 
 def del_all_request():
     """
     删除所有订单
     """
-    global stop_rcv_order, product_demand_table
+    global stop_rcv_order
     for pid in range(1, 8):
         request_form[0][pid].clear()
         request_form[1][pid].clear()
     request_form_record.clear()
-    product_demand_table = [0 for _ in range(8)]
     stop_rcv_order = True
 
 
@@ -726,21 +447,174 @@ class Request:
         return " ".join(str(item) for item in (self.key, self.req_type, self.relevant_bench))
 
 
-from queue import Queue
+class Job:
+    __slots__ = ['start', 'key', 'speed_angular', 'speed_linear', 'exist', 'start_func']
+
+    def __init__(self, start, robot_id, job_key, speed_angular, speed_linear, start_func):
+        self.start = start
+        self.key = (robot_id, job_key, start)
+        self.speed_angular = speed_angular
+        self.speed_linear = speed_linear
+        self.exist = True
+        self.start_func = start_func
+
+    def __lt__(self, other):
+        return self.start < other.start
+
+    def do_start_func(self):
+        self.start_func(self)
+
+    def cancel(self):
+        self.exist = False
+
+    def is_exist(self):
+        return self.exist
+
+    def __str__(self) -> str:
+        return " ".join(str(item) for item in (self.start, self.key))
+
+
+class Schedule:
+    __slots__ = ['jobs_start', 'job_record']
+
+    def __init__(self):
+        self.jobs_start = []
+        self.job_record = {}  # 有无
+
+    def add_job(self, job):
+        """
+        增加一项任务
+        :param job: 任务描述
+        """
+        if job.key not in self.job_record.keys():
+            heapq.heappush(self.jobs_start, job)
+            self.job_record[job.key] = job
+
+    def cancel_job(self, job):
+        """
+        取消该项任务
+        :param job: 任务描述
+        """
+        if job.key in self.job_record.keys():
+            self.job_record[job.key].cancel()
+            del self.job_record[job.key]
+
+    def update_job(self, job):
+        """
+        更新该项任务
+        :param job: 任务描述
+        """
+        self.cancel_job(job)
+        self.add_job(job)
+
+    def running(self, fid):
+        while len(self.jobs_start) > 0 and self.jobs_start[0].start == fid:
+            job = heapq.heappop(self.jobs_start)
+            if job.is_exist() and job.start_func is not None:
+                job.do_start_func()
+        self.echo()
+
+    def echo(self):
+        for job in self.jobs_start:
+            pass
+            # log(job)
+
+
 class PriorityQueue:
     def __init__(self, n):
         self.queues = []
-        for i in n:
+        self.record = {}
+        for i in range(n):
             self.queues.append(Queue())
 
     def get(self):
         for q in self.queues:
-            if not q.empty():
-                return q.get()
+            if not q.is_empty():
+                del self.record[q.peek()]
+                return q.dequeue()
         return None
 
-    def put(self, req, priority):
-        self.queues[priority].append(req)
+    def put(self, key, priority=1000000):
+        if priority == 1000000:
+            priority = len(self.queues) - 1
+        self.queues[priority].enqueue(key)
+        self.record[key] = priority
+
+    def get_priority(self, key):
+        if key in self.record:
+            return self.record[key]
+        return -1
+
+    def change_priority(self, key, priority):
+        if key in self.record:
+            self.queues[self.record[key]].remove(key)
+            del self.record[key]
+        self.put(key, priority)
+
+    def peek(self):
+        for q in self.queues:
+            if not q.is_empty():
+                return q.peek()
+        return None
 
     def del_all(self):
         self.queues.clear()
+        self.record.clear()
+
+
+class Queue(object):
+    """队列类"""
+    def __init__(self):
+        """初始化"""
+        self.__queue = []
+    def __len__(self):
+        """返回队列长度"""
+        return len(self.__queue)
+    def enqueue(self, value):
+        """入队"""
+        self.__queue.append(value)
+    def dequeue(self):
+        """出队"""
+        return self.__queue.pop(0)
+    def peek(self):
+        """返回队列顶部元素"""
+        return self.__queue[0]
+    def is_empty(self):
+        """检测队列是否为空"""
+        return self.__queue == []
+    def remove(self, key):
+        self.__queue.remove(key)
+    def travel(self):
+        """遍历队列"""
+        for val in self.__queue:
+            print(val)
+
+
+if __name__ == '__main__':
+    queue = PriorityQueue(5)
+
+    queue.put(99, 4)
+    queue.put(88, 3)
+    queue.put(77, 2)
+    queue.put(66, 1)
+    queue.put(22, 0)
+    print(queue.peek())  # 22
+    queue.change_priority(22, 4)
+    print(queue.peek())  # 66
+    print("dequeue : " + str(queue.get()))  # 66
+    print(queue.peek())  # 77
+    queue.put(66, 0)
+    print(queue.peek())  # 66
+    print("dequeue : " + str(queue.get()))  # 66
+
+    # que = Queue()
+    # print(que.is_empty())
+    # que.enqueue('a')
+    # que.enqueue('b')
+    # que.enqueue('c')
+    # que.enqueue('d')
+    # print(que.dequeue())
+    # print(que.is_empty())
+    # print(que.peek())
+    # print(len(que))
+    # que.travel()

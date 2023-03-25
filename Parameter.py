@@ -1,5 +1,7 @@
 import math
 import numpy as np
+import sys
+
 
 # ----------------------------------------
 # 环境参数设置
@@ -35,13 +37,27 @@ bench_bw_dis = {}  # 任意两个工作台之间的距离 {(bid1, bid2): 距离}
 workbenches_category = [[] for _ in range(10)]  # i类型工作台 = [b_1, b_2,...]
 buyer = [[] for _ in range(8)]  # 需要i号产品的工作台列表
 
-
 # ----------------------------------------
+frame_id = -1
 
 
 # ----------------------------------------
 # 工具函数
 # ----------------------------------------
+def log(content, clear=False):
+    """
+    打印每一帧的日志
+    :param content: 打印内容
+    :param clear: 是否清空文件
+    """
+    # pass
+    with open("log.txt", mode='a+', encoding='utf-8') as file:
+        if clear:
+            file.truncate(0)
+        file.write(str(content))
+        file.write("\n")
+
+
 def in_range(n, start, end=0):
     return start <= n <= end if end >= start else end <= n <= start
 
@@ -116,6 +132,6 @@ def get_vector_angle(v1, v2):
     else:
         return theta
 
-if __name__ == '__main__':
-    print(get_vector_angle((1,0), (0, -1)) * 57.3)
 
+if __name__ == '__main__':
+    print(get_vector_angle((1, 0), (0, -1)) * 57.3)
